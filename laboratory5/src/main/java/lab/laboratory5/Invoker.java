@@ -1,27 +1,38 @@
 package lab.laboratory5;
 
-import lab.laboratory5.commands.*;
-import lab.laboratory5.commands.done.Command;
-import lab.laboratory5.commands.done.HelpCommand;
+import lab.laboratory5.commands.done.*;
 
 import java.util.HashMap;
+import java.util.Scanner;
 
 public class Invoker {
-    private static final HashMap<String, Command> commands = new HashMap<>();
+    private final HashMap<String, Command> commands = new HashMap<>();
+    private final Receiver receiver;
+    private final Scanner scanner;
 
-    static {
-        commands.put("help", new HelpCommand());
-        commands.put("info", new InfoCommand());
-        commands.put("show", new ShowCommand());
-        commands.put("add", new AddCommand());
-        commands.put("update", new UpdateCommand());
-        commands.put("remove_by_id", new RemoveByIdCommand());
-        commands.put("clear", new ClearCommand());
+    public Invoker(Receiver collection, Scanner scanner) {
+        this.receiver = collection;
+        this.scanner = scanner;
+        registerCommands(); // Регистрируем команды при создании Invoker
     }
 
-    public void invoke(String command, String ... arguments) {
+    private void registerCommands() {
+        commands.put("help", new HelpCommand());
+        commands.put("info", new InfoCommand(receiver));
+        commands.put("show", new ShowCommand(receiver));
+        commands.put("add", new AddCommand(receiver, scanner));
+        commands.put("update", new UpdateCommand(receiver, scanner));
+        commands.put("remove_by_id", new RemoveByIdCommand(receiver));
+        commands.put("clear", new ClearCommand(receiver));
+    }
 
-        System.out.println(commands.get(command).execute());
+    public void invoke(String command, String... arguments) {
+        Command cmd = commands.get(command);
+        if (cmd != null) {
+            cmd.execute(arguments); // Выполняем команду с аргументами
+        } else {
+            System.out.println("Unknown command: " + command);
+        }
     }
 }
 

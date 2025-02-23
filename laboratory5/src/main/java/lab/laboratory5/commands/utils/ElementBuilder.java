@@ -23,22 +23,22 @@ public class ElementBuilder {
     }
 
     private String inputName() {
-        System.out.print("Введите название группы: ");
+        System.out.print("Enter group name: ");
         String name = scanner.nextLine().trim();
         while (name.isEmpty()) {
-            System.out.print("Название группы не может быть пустым. Попробуйте снова: ");
+            System.out.print("Group name cannot be empty. Try again: ");
             name = scanner.nextLine().trim();
         }
         return name;
     }
 
     private Coordinates inputCoordinates() {
-        System.out.println("Введите координаты:");
+        System.out.println("Enter coordinates:");
 
-        System.out.print("Введите координату X (число с плавающей точкой): ");
+        System.out.print("Enter X coordinate (floating-point number): ");
         Double x = readDouble();
 
-        System.out.print("Введите координату Y (целое число, больше -365): ");
+        System.out.print("Enter Y coordinate (integer, greater than -365): ");
         long y = readLongGreaterThan(-365);
 
         return new CoordinatesBuilder()
@@ -48,80 +48,87 @@ public class ElementBuilder {
     }
 
     private int inputTransferredStudents() {
-        System.out.print("Введите количество переведенных студентов (должно быть больше 0): ");
+        System.out.print("Enter the number of transferred students (must be greater than 0): ");
         int transferredStudents = readInt();
         while (transferredStudents <= 0) {
-            System.out.print("Количество переведенных студентов должно быть больше 0. Попробуйте снова: ");
+            System.out.print("The number of transferred students must be greater than 0. Try again: ");
             transferredStudents = readInt();
         }
         return transferredStudents;
     }
 
     private Semester inputSemesterEnum() {
-        System.out.println("Доступные семестры:");
-        for (Semester semester : Semester.values()) {
-            System.out.println(semester.ordinal() + 1 + ". " + semester);
-        }
-
-        System.out.print("Выберите номер семестра: ");
-        int choice = readIntInRange(1, Semester.values().length);
-        return Semester.values()[choice - 1];
+        System.out.print("Choose semester (" + getEnumValues(Semester.values()) + "): ");
+        return inputEnum(Semester.values(), "semester");
     }
 
     private Person inputGroupAdmin() {
-        System.out.print("Введите имя администратора группы: ");
+        System.out.println("Enter group admin details:");
+
+        // Enter name
+        System.out.print("Enter admin name: ");
         String name = scanner.nextLine().trim();
         while (name.isEmpty()) {
-            System.out.print("Имя администратора группы не может быть пустым. Попробуйте снова: ");
+            System.out.print("Admin name cannot be empty. Try again: ");
             name = scanner.nextLine().trim();
         }
 
-        System.out.print("Введите возраст администратора группы (целое число): ");
-        int age = readInt();
+        // Enter passport ID
+        System.out.print("Enter passport ID: ");
+        String passportID = scanner.nextLine().trim();
+        while (passportID.isEmpty()) {
+            System.out.print("Passport ID cannot be empty. Try again: ");
+            passportID = scanner.nextLine().trim();
+        }
 
-        return new Person(name, age);
+        // Enter eye color
+        System.out.print("Choose eye color (" + getEnumValues(lab.laboratory5.entity.colors.eye.Color.values()) + "): ");
+        lab.laboratory5.entity.colors.eye.Color eyeColor = inputEnum(lab.laboratory5.entity.colors.eye.Color.values(), "eye color");
+
+        // Enter hair color
+        System.out.print("Choose hair color (" + getEnumValues(lab.laboratory5.entity.colors.hair.Color.values()) + "): ");
+        lab.laboratory5.entity.colors.hair.Color hairColor = inputEnum(lab.laboratory5.entity.colors.hair.Color.values(), "hair color");
+
+        // Enter nationality
+        System.out.print("Choose nationality (" + getEnumValues(Country.values()) + "): ");
+        Country nationality = inputEnum(Country.values(), "nationality");
+
+        // Create Person object using Builder
+        return new PersonBuilder()
+                .name(name)
+                .passportID(passportID)
+                .eyeColor(eyeColor)
+                .hairColor(hairColor)
+                .nationality(nationality)
+                .build();
     }
 
     private Integer inputStudentsCount() {
-        System.out.print("Введите количество студентов (должно быть больше 0, или оставьте пустым): ");
+        System.out.print("Enter the number of students (must be greater than 0, or leave empty): ");
         String input = scanner.nextLine().trim();
         if (input.isEmpty()) {
             return null;
         }
         int studentsCount = Integer.parseInt(input);
         while (studentsCount <= 0) {
-            System.out.print("Количество студентов должно быть больше 0. Попробуйте снова: ");
+            System.out.print("The number of students must be greater than 0. Try again: ");
             studentsCount = Integer.parseInt(scanner.nextLine().trim());
         }
         return studentsCount;
     }
 
     private FormOfEducation inputFormOfEducation() {
-        System.out.println("Доступные формы обучения:");
-        for (FormOfEducation form : FormOfEducation.values()) {
-            System.out.println(form.ordinal() + 1 + ". " + form);
-        }
-
-        System.out.print("Выберите номер формы обучения (или оставьте пустым): ");
-        String input = scanner.nextLine().trim();
-        if (input.isEmpty()) {
-            return null;
-        }
-        int choice = Integer.parseInt(input);
-        while (choice < 1 || choice > FormOfEducation.values().length) {
-            System.out.print("Некорректный выбор. Попробуйте снова: ");
-            choice = Integer.parseInt(scanner.nextLine().trim());
-        }
-        return FormOfEducation.values()[choice - 1];
+        System.out.print("Choose form of education (" + getEnumValues(FormOfEducation.values()) + "): ");
+        return inputEnum(FormOfEducation.values(), "form of education");
     }
 
-    // Вспомогательные методы для ввода чисел
+    // Helper methods for number input
     private int readInt() {
         while (true) {
             try {
                 return Integer.parseInt(scanner.nextLine().trim());
             } catch (NumberFormatException e) {
-                System.out.print("Некорректный ввод. Введите целое число: ");
+                System.out.print("Invalid input. Enter an integer: ");
             }
         }
     }
@@ -131,7 +138,7 @@ public class ElementBuilder {
             try {
                 return Double.parseDouble(scanner.nextLine().trim());
             } catch (NumberFormatException e) {
-                System.out.print("Некорректный ввод. Введите число с плавающей точкой: ");
+                System.out.print("Invalid input. Enter a floating-point number: ");
             }
         }
     }
@@ -143,22 +150,35 @@ public class ElementBuilder {
                 if (value > min) {
                     return value;
                 } else {
-                    System.out.print("Значение должно быть больше " + min + ". Попробуйте снова: ");
+                    System.out.print("Value must be greater than " + min + ". Try again: ");
                 }
             } catch (NumberFormatException e) {
-                System.out.print("Некорректный ввод. Введите целое число: ");
+                System.out.print("Invalid input. Enter an integer: ");
             }
         }
     }
 
-    private int readIntInRange(int min, int max) {
-        int value;
+    // Helper method to input enum values
+    private <T extends Enum<T>> T inputEnum(T[] values, String fieldName) {
         while (true) {
-            value = readInt();
-            if (value >= min && value <= max) {
-                return value;
+            String input = scanner.nextLine().trim();
+            if (input.isEmpty()) {
+                return null; // Optional field
             }
-            System.out.print("Некорректный выбор. Введите число от " + min + " до " + max + ": ");
+            try {
+                return Enum.valueOf((Class<T>) values.getClass().getComponentType(), input.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                System.out.print("Invalid input. Choose " + fieldName + " (" + getEnumValues(values) + "): ");
+            }
         }
+    }
+
+    // Helper method to get enum values as a string
+    private <T extends Enum<T>> String getEnumValues(T[] values) {
+        StringBuilder sb = new StringBuilder();
+        for (T value : values) {
+            sb.append(value).append(", ");
+        }
+        return sb.substring(0, sb.length() - 2); // Remove the last ", "
     }
 }

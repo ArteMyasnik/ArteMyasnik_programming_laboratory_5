@@ -7,19 +7,11 @@ import java.io.IOException;
 
 public class SaveCommand implements Command {
     /**
-     * @return
-     */
-    @Override
-    public String getName() {
-        return "save";
-    }
-
-    /**
      * @param arguments
      * @return
      */
     @Override
-    public String execute(String... arguments) {
+    public void execute(String... arguments) {
         final String fileName = arguments[0];
         try (FileWriter writer = new FileWriter(fileName, true)) {
             writer.write("\nНовая строка, добавленная программой.");
@@ -27,6 +19,6 @@ public class SaveCommand implements Command {
         } catch (IOException e) {
             System.err.println("Ошибка при записи в файл: " + e.getMessage());
         }
-        return "";
+//        return "";
     }
 }

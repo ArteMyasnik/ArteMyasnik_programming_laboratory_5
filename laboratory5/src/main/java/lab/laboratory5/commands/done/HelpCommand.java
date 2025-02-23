@@ -1,22 +1,13 @@
 package lab.laboratory5.commands.done;
 
 public class HelpCommand implements Command {
-
-    /**
-     * @return
-     */
-    @Override
-    public String getName() {
-        return "help";
-    }
-
     /**
      * @param arguments
      * @return
      */
     @Override
-    public String execute(String... arguments) {
-        return """
+    public void execute(String... arguments) {
+        System.out.println("""
                 help : вывести справку по доступным командам
                 info : вывести в стандартный поток вывода информацию о коллекции (тип, дата инициализации, количество элементов и т.д.)
                 show : вывести в стандартный поток вывода все элементы коллекции в строковом представлении
@@ -33,6 +24,7 @@ public class HelpCommand implements Command {
                 filter_less_than_form_of_education formOfEducation : вывести элементы, значение поля formOfEducation которых меньше заданного
                 print_descending : вывести элементы коллекции в порядке убывания
                 print_unique_group_admin : вывести уникальные значения поля groupAdmin всех элементов в коллекции
-                """;
+                """
+        );
     }
 }

@@ -8,21 +8,12 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 
 public class ReadCommand implements Command {
-
-    /**
-     * @return
-     */
-    @Override
-    public String getName() {
-        return "read";
-    }
-
     /**
      * @param arguments
      * @return
      */
     @Override
-    public String execute(String... arguments) {
+    public void execute(String... arguments) {
         final String fileName = arguments[0];
         try (InputStreamReader isr = new InputStreamReader(new FileInputStream(fileName));
              BufferedReader reader = new BufferedReader(isr)) {
@@ -35,6 +26,6 @@ public class ReadCommand implements Command {
         } catch (IOException e) {
             System.err.println("Ошибка при чтении файла: " + e.getMessage());
         }
-        return "";
+//        return "";
     }
 }
