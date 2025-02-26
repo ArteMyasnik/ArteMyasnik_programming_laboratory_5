@@ -65,7 +65,6 @@ public class ElementBuilder {
     private Person inputGroupAdmin() {
         System.out.println("Enter group admin details:");
 
-        // Enter name
         System.out.print("Enter admin name: ");
         String name = scanner.nextLine().trim();
         while (name.isEmpty()) {
@@ -73,7 +72,6 @@ public class ElementBuilder {
             name = scanner.nextLine().trim();
         }
 
-        // Enter passport ID
         System.out.print("Enter passport ID: ");
         String passportID = scanner.nextLine().trim();
         while (passportID.isEmpty()) {
@@ -81,19 +79,15 @@ public class ElementBuilder {
             passportID = scanner.nextLine().trim();
         }
 
-        // Enter eye color
         System.out.print("Choose eye color (" + getEnumValues(lab.laboratory5.entity.colors.eye.Color.values()) + "): ");
         lab.laboratory5.entity.colors.eye.Color eyeColor = inputEnum(lab.laboratory5.entity.colors.eye.Color.values(), "eye color");
 
-        // Enter hair color
         System.out.print("Choose hair color (" + getEnumValues(lab.laboratory5.entity.colors.hair.Color.values()) + "): ");
         lab.laboratory5.entity.colors.hair.Color hairColor = inputEnum(lab.laboratory5.entity.colors.hair.Color.values(), "hair color");
 
-        // Enter nationality
         System.out.print("Choose nationality (" + getEnumValues(Country.values()) + "): ");
         Country nationality = inputEnum(Country.values(), "nationality");
 
-        // Create Person object using Builder
         return new PersonBuilder()
                 .name(name)
                 .passportID(passportID)
@@ -122,7 +116,6 @@ public class ElementBuilder {
         return inputEnum(FormOfEducation.values(), "form of education");
     }
 
-    // Helper methods for number input
     private int readInt() {
         while (true) {
             try {
@@ -158,12 +151,11 @@ public class ElementBuilder {
         }
     }
 
-    // Helper method to input enum values
     private <T extends Enum<T>> T inputEnum(T[] values, String fieldName) {
         while (true) {
             String input = scanner.nextLine().trim();
             if (input.isEmpty()) {
-                return null; // Optional field
+                return null;
             }
             try {
                 return Enum.valueOf((Class<T>) values.getClass().getComponentType(), input.toUpperCase());
@@ -173,12 +165,11 @@ public class ElementBuilder {
         }
     }
 
-    // Helper method to get enum values as a string
     private <T extends Enum<T>> String getEnumValues(T[] values) {
         StringBuilder sb = new StringBuilder();
         for (T value : values) {
             sb.append(value).append(", ");
         }
-        return sb.substring(0, sb.length() - 2); // Remove the last ", "
+        return sb.substring(0, sb.length() - 2);
     }
 }

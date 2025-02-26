@@ -53,4 +53,11 @@ public class Receiver {
     public void removeById(int id) {
         collection.removeIf(studyGroup -> studyGroup.getId() == id);
     }
+
+    public StudyGroup removeHead() {
+        if (collection.isEmpty()) {
+            throw new IllegalStateException("The collection is empty.");
+        }
+        return collection.removeFirst();
+    }
 }
