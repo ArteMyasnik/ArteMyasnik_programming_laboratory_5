@@ -6,8 +6,8 @@ public class HelpCommand implements Command {
      * @return
      */
     @Override
-    public void execute(String... arguments) {
-        System.out.println("""
+    public String execute(String... arguments) {
+        return """
                 help : вывести справку по доступным командам
                 info : вывести в стандартный поток вывода информацию о коллекции (тип, дата инициализации, количество элементов и т.д.)
                 show : вывести в стандартный поток вывода все элементы коллекции в строковом представлении
@@ -25,6 +25,6 @@ public class HelpCommand implements Command {
                 print_descending : вывести элементы коллекции в порядке убывания
                 print_unique_group_admin : вывести уникальные значения поля groupAdmin всех элементов в коллекции
                 """
-        );
+        ;
     }
 }

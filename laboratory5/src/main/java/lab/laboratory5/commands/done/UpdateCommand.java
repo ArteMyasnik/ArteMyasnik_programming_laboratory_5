@@ -16,28 +16,26 @@ public class UpdateCommand implements Command {
     }
 
     @Override
-    public void execute(String... arguments) {
+    public String execute(String... arguments) {
         if (arguments.length == 0) {
-            System.out.println("Error: ID is required.");
-            return;
+            return "Error: ID is required.";
         }
 
         try {
             int id = Integer.parseInt(arguments[0]);
             StudyGroup existingGroup = receiver.getById(id);
             if (existingGroup == null) {
-                System.out.println("Error: Study group with ID " + id + " not found.");
-                return;
+                return "Error: Study group with ID " + id + " not found.";
             }
 
             ElementBuilder builder = new ElementBuilder(scanner);
             StudyGroup updatedGroup = builder.createStudyGroup();
             receiver.update(id, updatedGroup);
-            System.out.println("Study group with ID " + id + " updated successfully!");
+            return "Study group with ID " + id + " updated successfully!";
         } catch (NumberFormatException e) {
-            System.out.println("Error: Invalid ID format.");
+            return "Error: Invalid ID format.";
         } catch (IllegalArgumentException e) {
-            System.out.println("Error: " + e.getMessage());
+            return "Error: " + e.getMessage();
         }
     }
 }

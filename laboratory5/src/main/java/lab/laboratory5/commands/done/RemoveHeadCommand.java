@@ -11,13 +11,12 @@ public class RemoveHeadCommand implements Command {
     }
 
     @Override
-    public void execute(String... arguments) {
+    public String execute(String... arguments) {
         try {
             StudyGroup removedGroup = receiver.removeHead();
-            System.out.println("Removed study group:");
-            System.out.println(removedGroup);
+            return "Removed study group:\n" + removedGroup;
         } catch (IllegalStateException e) {
-            System.out.println("Error: " + e.getMessage());
+            return "Error: " + e.getMessage();
         }
     }
 }

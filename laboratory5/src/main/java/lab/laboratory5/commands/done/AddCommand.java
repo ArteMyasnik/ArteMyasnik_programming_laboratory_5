@@ -15,10 +15,10 @@ public class AddCommand implements Command {
     }
 
     @Override
-    public void execute(String... arguments) {
+    public String execute(String... arguments) {
         ElementBuilder builder = new ElementBuilder(scanner);
         StudyGroup studyGroup = builder.createStudyGroup();
         collection.add(studyGroup);
-        System.out.println("Study group added successfully!");
+        return "Study group added successfully!";
     }
 }

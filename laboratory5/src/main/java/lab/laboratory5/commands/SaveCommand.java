@@ -11,14 +11,13 @@ public class SaveCommand implements Command {
      * @return
      */
     @Override
-    public void execute(String... arguments) {
+    public String execute(String... arguments) {
         final String fileName = arguments[0];
         try (FileWriter writer = new FileWriter(fileName, true)) {
             writer.write("\nНовая строка, добавленная программой.");
-            System.out.println("Данные успешно записаны в файл.");
+            return "Данные успешно записаны в файл.";
         } catch (IOException e) {
-            System.err.println("Ошибка при записи в файл: " + e.getMessage());
+            return "Ошибка при записи в файл: " + e.getMessage();
         }
-//        return "";
     }
 }

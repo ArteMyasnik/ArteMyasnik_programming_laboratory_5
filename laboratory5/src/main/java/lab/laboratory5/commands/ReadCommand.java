@@ -13,19 +13,19 @@ public class ReadCommand implements Command {
      * @return
      */
     @Override
-    public void execute(String... arguments) {
+    public String execute(String... arguments) {
         final String fileName = arguments[0];
         try (InputStreamReader isr = new InputStreamReader(new FileInputStream(fileName));
              BufferedReader reader = new BufferedReader(isr)) {
 
-            System.out.println("Содержимое файла " + fileName + ":");
+            StringBuilder result = new StringBuilder("Содержимое файла " + fileName + ":");
             String line;
             while ((line = reader.readLine()) != null) {
-                System.out.println(line);
+                result.append(line).append("\n");
             }
+            return result.toString();
         } catch (IOException e) {
-            System.err.println("Ошибка при чтении файла: " + e.getMessage());
+            return "Ошибка при чтении файла: " + e.getMessage();
         }
-//        return "";
     }
 }

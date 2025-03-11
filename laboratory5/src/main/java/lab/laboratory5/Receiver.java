@@ -4,10 +4,14 @@ import lab.laboratory5.entity.StudyGroup;
 import lombok.Getter;
 
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.Set;
 
 public class Receiver {
     private final LinkedList<StudyGroup> collection = new LinkedList<>();
+    private final Set<String> passportRegistration = new HashSet<>();
+
     @Getter
     private final LocalDate initializationDate = LocalDate.now();
 

@@ -10,8 +10,8 @@ public class ClearCommand implements Command {
     }
 
     @Override
-    public void execute(String... arguments) {
+    public String execute(String... arguments) {
         receiver.clear();
-        System.out.println("Collection cleared successfully!");
+        return "Collection cleared successfully!";
     }
 }

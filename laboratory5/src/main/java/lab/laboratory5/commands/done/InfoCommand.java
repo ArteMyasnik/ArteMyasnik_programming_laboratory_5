@@ -10,9 +10,9 @@ public class InfoCommand implements Command {
     }
 
     @Override
-    public void execute(String... arguments) {
-        System.out.println("Collection type: " + receiver.getCollectionType());
-        System.out.println("Initialization date: " + receiver.getInitializationDate());
-        System.out.println("Number of elements: " + receiver.size());
+    public String execute(String... arguments) {
+        return "Collection type: " + receiver.getCollectionType() + "\n" +
+                "Initialization date: " + receiver.getInitializationDate() + "\n" +
+                "Number of elements: " + receiver.size();
     }
 }

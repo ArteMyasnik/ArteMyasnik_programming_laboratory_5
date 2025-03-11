@@ -10,20 +10,19 @@ public class RemoveByIdCommand implements Command {
     }
 
     @Override
-    public void execute(String... arguments) {
+    public String execute(String... arguments) {
         if (arguments.length == 0) {
-            System.out.println("Error: ID is required.");
-            return;
-        }
+            return "Error: ID is required.";
+            }
 
         try {
             int id = Integer.parseInt(arguments[0]);
             receiver.removeById(id);
-            System.out.println("Study group with ID " + id + " removed successfully!");
+            return "Study group with ID " + id + " removed successfully!";
         } catch (NumberFormatException e) {
-            System.out.println("Error: Invalid ID format.");
+            return "Error: Invalid ID format.";
         } catch (IllegalArgumentException e) {
-            System.out.println("Error: " + e.getMessage());
+            return "Error: " + e.getMessage();
         }
     }
 }

@@ -1,6 +1,5 @@
 package lab.laboratory5;
 
-import lab.laboratory5.commands.done.RemoveHeadCommand;
 import lab.laboratory5.commands.done.*;
 
 import java.util.HashMap;
@@ -14,7 +13,7 @@ public class Invoker {
     public Invoker(Receiver collection, Scanner scanner) {
         this.receiver = collection;
         this.scanner = scanner;
-        registerCommands(); // Регистрируем команды при создании Invoker
+        registerCommands();
     }
 
     private void registerCommands() {
@@ -26,12 +25,15 @@ public class Invoker {
         commands.put("remove_by_id", new RemoveByIdCommand(receiver));
         commands.put("clear", new ClearCommand(receiver));
         commands.put("remove_head", new RemoveHeadCommand(receiver));
+        commands.put("add_if_max", new AddIfMaxCommand(receiver, scanner));
+        commands.put("remove_lower", new RemoveLowerCommand(receiver, scanner));
+        commands.put("print_descending", new PrintDescendingCommand(receiver));
     }
 
     public void invoke(String command, String... arguments) {
         Command cmd = commands.get(command);
         if (cmd != null) {
-            cmd.execute(arguments); // Выполняем команду с аргументами
+            cmd.execute(arguments);
         } else {
             System.out.println("Unknown command: " + command);
         }
