@@ -1,12 +1,16 @@
 package lab.laboratory5.commands.done;
 
 import lab.laboratory5.Receiver;
+import lab.laboratory5.commands.utils.PassportValidator;
+import lab.laboratory5.entity.StudyGroup;
 
 public class RemoveByIdCommand implements Command {
     private final Receiver receiver;
+    private final PassportValidator passportValidator;
 
-    public RemoveByIdCommand(Receiver receiver) {
+    public RemoveByIdCommand(Receiver receiver, PassportValidator passportValidator) {
         this.receiver = receiver;
+        this.passportValidator = passportValidator;
     }
 
     @Override
@@ -17,7 +21,9 @@ public class RemoveByIdCommand implements Command {
 
         try {
             int id = Integer.parseInt(arguments[0]);
-            receiver.removeById(id);
+            StudyGroup removedGroup = receiver.removeById(id);
+            String passportID = removedGroup.getGroupAdmin().getPassportID();
+            passportValidator.removePassword(passportID);
             return "Study group with ID " + id + " removed successfully!";
         } catch (NumberFormatException e) {
             return "Error: Invalid ID format.";

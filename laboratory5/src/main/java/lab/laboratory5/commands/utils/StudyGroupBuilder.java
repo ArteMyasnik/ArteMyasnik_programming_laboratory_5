@@ -5,10 +5,10 @@ import java.time.ZonedDateTime;
 
 public class StudyGroupBuilder {
     private static int lastGeneratedId = 0;
-    private Integer id;
+    private final Integer id;
     private String name;
     private Coordinates coordinates;
-    private ZonedDateTime creationDate;
+    private final ZonedDateTime creationDate;
     private Integer studentsCount;
     private int transferredStudents;
     private FormOfEducation formOfEducation;

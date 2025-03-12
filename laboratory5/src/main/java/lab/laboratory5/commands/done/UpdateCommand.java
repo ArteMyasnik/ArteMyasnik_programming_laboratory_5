@@ -1,18 +1,17 @@
 package lab.laboratory5.commands.done;
 
 import lab.laboratory5.commands.utils.ElementBuilder;
+import lab.laboratory5.commands.utils.PassportValidator;
 import lab.laboratory5.entity.StudyGroup;
 import lab.laboratory5.Receiver;
 
-import java.util.Scanner;
-
 public class UpdateCommand implements Command {
     private final Receiver receiver;
-    private final Scanner scanner;
+    private final ElementBuilder elementBuilder;
 
-    public UpdateCommand(Receiver receiver, Scanner scanner) {
+    public UpdateCommand(Receiver receiver, ElementBuilder elementBuilder) {
         this.receiver = receiver;
-        this.scanner = scanner;
+        this.elementBuilder = elementBuilder;
     }
 
     @Override
@@ -27,9 +26,9 @@ public class UpdateCommand implements Command {
             if (existingGroup == null) {
                 return "Error: Study group with ID " + id + " not found.";
             }
-
-            ElementBuilder builder = new ElementBuilder(scanner);
-            StudyGroup updatedGroup = builder.createStudyGroup();
+            String oldPassportID = existingGroup.getGroupAdmin().getPassportID();
+            elementBuilder.getPassportValidator().removePassword(oldPassportID);
+            StudyGroup updatedGroup = elementBuilder.createStudyGroup();
             receiver.update(id, updatedGroup);
             return "Study group with ID " + id + " updated successfully!";
         } catch (NumberFormatException e) {

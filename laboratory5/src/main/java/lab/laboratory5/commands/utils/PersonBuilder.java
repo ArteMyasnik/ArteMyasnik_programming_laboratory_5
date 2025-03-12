@@ -18,11 +18,10 @@ public class PersonBuilder {
         return this;
     }
 
-    public PersonBuilder passportID(String passportID) {
+    public PersonBuilder passportID(PassportValidator passportValidator, String passportID) {
         if (passportID == null) {
             throw new IllegalArgumentException("PassportID cannot be null");
         }
-        // Проверка на уникальность паспорта
         this.passportID = passportID;
         return this;
     }

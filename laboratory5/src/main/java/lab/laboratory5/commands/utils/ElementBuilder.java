@@ -1,13 +1,18 @@
 package lab.laboratory5.commands.utils;
 
 import lab.laboratory5.entity.*;
+import lombok.Getter;
+
 import java.util.Scanner;
 
 public class ElementBuilder {
     private final Scanner scanner;
+    @Getter
+    private final PassportValidator passportValidator;
 
-    public ElementBuilder(Scanner scanner) {
+    public ElementBuilder(Scanner scanner, PassportValidator passportValidator) {
         this.scanner = scanner;
+        this.passportValidator = passportValidator;
     }
 
     public StudyGroup createStudyGroup() {
@@ -74,10 +79,18 @@ public class ElementBuilder {
 
         System.out.print("Enter passport ID: ");
         String passportID = scanner.nextLine().trim();
-        while (passportID.isEmpty()) {
-            System.out.print("Passport ID cannot be empty. Try again: ");
+        while (true) {
+            if (passportID.isEmpty()) {
+                System.out.print("Passport ID cannot be empty. Try again: ");
+            } else if (!passportValidator.isPasswordUnique(passportID)) {
+                System.out.print("Passport ID must be unique. Try again: ");
+            } else {
+                break;
+            }
             passportID = scanner.nextLine().trim();
         }
+
+        passportValidator.addPassword(passportID);
 
         System.out.print("Choose eye color (" + getEnumValues(lab.laboratory5.entity.colors.eye.Color.values()) + "): ");
         lab.laboratory5.entity.colors.eye.Color eyeColor = inputEnum(lab.laboratory5.entity.colors.eye.Color.values(), "eye color");
@@ -88,13 +101,7 @@ public class ElementBuilder {
         System.out.print("Choose nationality (" + getEnumValues(Country.values()) + "): ");
         Country nationality = inputEnum(Country.values(), "nationality");
 
-        return new PersonBuilder()
-                .name(name)
-                .passportID(passportID)
-                .eyeColor(eyeColor)
-                .hairColor(hairColor)
-                .nationality(nationality)
-                .build();
+        return new Person(name, passportID, eyeColor, hairColor, nationality);
     }
 
     private Integer inputStudentsCount() {
@@ -116,6 +123,7 @@ public class ElementBuilder {
         return inputEnum(FormOfEducation.values(), "form of education");
     }
 
+    // helpful methods-------------------------------------------------------------------------------------------------
     private int readInt() {
         while (true) {
             try {

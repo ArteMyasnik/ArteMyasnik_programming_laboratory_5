@@ -19,16 +19,13 @@ public class ShowCommand implements Command {
             return "The collection is empty.";
         } else {
             List<StudyGroup> studyGroups = receiver.getAll();
-
             studyGroups.sort(
                     Comparator.comparing(StudyGroup::getName, String.CASE_INSENSITIVE_ORDER)
             );
-
             StringBuilder result = new StringBuilder("Study groups in the collection (sorted by name):");
             for (StudyGroup studyGroup : studyGroups) {
                 result.append(studyGroup).append("\n");
             }
-
             return result.toString();
         }
     }

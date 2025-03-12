@@ -1,25 +1,24 @@
 package lab.laboratory5.commands.done;
 
 import lab.laboratory5.commands.utils.ElementBuilder;
+import lab.laboratory5.commands.utils.PassportValidator;
 import lab.laboratory5.entity.StudyGroup;
 import lab.laboratory5.Receiver;
 
 import java.util.Comparator;
-import java.util.Scanner;
 
 public class AddIfMaxCommand implements Command {
     private final Receiver receiver;
-    private final Scanner scanner;
+    private final ElementBuilder elementBuilder;
 
-    public AddIfMaxCommand(Receiver receiver, Scanner scanner) {
+    public AddIfMaxCommand(Receiver receiver, ElementBuilder elementBuilder) {
         this.receiver = receiver;
-        this.scanner = scanner;
+        this.elementBuilder = elementBuilder;
     }
 
     @Override
     public String execute(String... arguments) {
-        ElementBuilder builder = new ElementBuilder(scanner);
-        StudyGroup newGroup = builder.createStudyGroup();
+        StudyGroup newGroup = elementBuilder.createStudyGroup();
 
         StudyGroup maxGroup = receiver.getAll().stream()
                 .max(Comparator.comparing(StudyGroup::getName, String.CASE_INSENSITIVE_ORDER))

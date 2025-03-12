@@ -4,13 +4,11 @@ import lab.laboratory5.entity.StudyGroup;
 import lombok.Getter;
 
 import java.time.LocalDate;
-import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.Set;
 
 public class Receiver {
     private final LinkedList<StudyGroup> collection = new LinkedList<>();
-    private final Set<String> passportRegistration = new HashSet<>();
 
     @Getter
     private final LocalDate initializationDate = LocalDate.now();
@@ -54,8 +52,19 @@ public class Receiver {
         throw new IllegalArgumentException("Study group with ID " + id + " not found.");
     }
 
-    public void removeById(int id) {
-        collection.removeIf(studyGroup -> studyGroup.getId() == id);
+    public StudyGroup removeById(int id) {
+        StudyGroup removedGroup = null;
+        Iterator<StudyGroup> iterator = collection.iterator();
+
+        while (iterator.hasNext()) {
+            StudyGroup studyGroup = iterator.next();
+            if (studyGroup.getId() == id) {
+                removedGroup = studyGroup;
+                iterator.remove();
+                break;
+            }
+        }
+        return removedGroup;
     }
 
     public StudyGroup removeHead() {
