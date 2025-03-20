@@ -2,7 +2,6 @@ package lab.laboratory5.commands.done;
 
 import lab.laboratory5.entity.StudyGroup;
 import lab.laboratory5.Receiver;
-import lab.laboratory5.commands.utils.PassportValidator;
 
 public class RemoveHeadCommand implements Command {
     private final Receiver receiver;

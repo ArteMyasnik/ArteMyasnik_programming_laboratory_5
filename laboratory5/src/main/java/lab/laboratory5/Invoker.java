@@ -2,7 +2,7 @@ package lab.laboratory5;
 
 import lab.laboratory5.commands.done.*;
 import lab.laboratory5.commands.utils.ElementBuilder;
-import lab.laboratory5.commands.utils.PassportValidator;
+import lab.laboratory5.commands.done.PassportValidator;
 
 import java.util.HashMap;
 import java.util.Scanner;
@@ -34,6 +34,7 @@ public class Invoker {
         commands.put("remove_lower", new RemoveLowerCommand(receiver, elementBuilder, passportValidator));
         commands.put("print_descending", new PrintDescendingCommand(receiver));
         commands.put("print_unique_group_admin", new PrintUniqueGroupAdminCommand(receiver));
+        commands.put("filter_less_than_form_of_education", new FilterLessThanFormOfEducationCommand(receiver));
     }
 
     public void invoke(String command, String... arguments) {
@@ -51,5 +52,4 @@ public class Invoker {
 save : сохранить коллекцию в файл
 execute_script file_name : считать и исполнить скрипт из указанного файла. В скрипте содержатся команды в таком же виде, в котором их вводит пользователь в интерактивном режиме.
 filter_less_than_form_of_education formOfEducation : вывести элементы, значение поля formOfEducation которых меньше заданного
-print_unique_group_admin : вывести уникальные значения поля groupAdmin всех элементов в коллекции
  */

@@ -1,7 +1,6 @@
 package lab.laboratory5.commands.done;
 
 import lab.laboratory5.Receiver;
-import lab.laboratory5.commands.utils.PassportValidator;
 import lab.laboratory5.entity.StudyGroup;
 
 public class RemoveByIdCommand implements Command {

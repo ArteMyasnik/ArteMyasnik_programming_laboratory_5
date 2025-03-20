@@ -1,12 +1,10 @@
 package lab.laboratory5.commands.done;
 
 import lab.laboratory5.commands.utils.ElementBuilder;
-import lab.laboratory5.commands.utils.PassportValidator;
 import lab.laboratory5.entity.StudyGroup;
 import lab.laboratory5.Receiver;
 
 import java.util.Iterator;
-import java.util.Scanner;
 
 public class RemoveLowerCommand implements Command {
     private final Receiver receiver;

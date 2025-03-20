@@ -1,12 +1,12 @@
-package lab.laboratory5.commands.utils;
+package lab.laboratory5.commands.done;
 
 import lombok.Getter;
 
 import java.util.HashSet;
 import java.util.Set;
 
+@Getter
 public class PassportValidator {
-    @Getter
     private final Set<String> passportValidator = new HashSet<>();
 
     public boolean isPasswordUnique(String password) {
@@ -19,8 +19,8 @@ public class PassportValidator {
         }
     }
 
-    public boolean removePassword(String password) {
-        return passportValidator.remove(password);
+    public void removePassword(String password) {
+        passportValidator.remove(password);
     }
 
 }
