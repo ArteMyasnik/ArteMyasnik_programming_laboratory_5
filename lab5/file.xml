@@ -1,0 +1,59 @@
+<StudyGroups>
+  <StudyGroup id="1">
+    <name>Group1</name>
+    <coordinates>
+      <x>10.5</x>
+      <y>100</y>
+    </coordinates>
+    <creationDate>1696161600.000000000</creationDate>
+    <studentsCount>30</studentsCount>
+    <transferredStudents>10</transferredStudents>
+    <semesterEnum>SECOND</semesterEnum>
+    <groupAdmin>
+      <name>Admin1</name>
+      <passportID>12345</passportID>
+      <hairColor>BLUE</hairColor>
+      <eyeColor>BLUE</eyeColor>
+      <nationality>USA</nationality>
+    </groupAdmin>
+    <formOfEducation>FULL_TIME_EDUCATION</formOfEducation>
+  </StudyGroup>
+  <StudyGroup id="2">
+    <name>Group2</name>
+    <coordinates>
+      <x>15.0</x>
+      <y>200</y>
+    </coordinates>
+    <creationDate>1696248000.000000000</creationDate>
+    <studentsCount>25</studentsCount>
+    <transferredStudents>5</transferredStudents>
+    <semesterEnum>SEVENTH</semesterEnum>
+    <groupAdmin>
+      <name>Admin2</name>
+      <passportID>67890</passportID>
+      <hairColor>RED</hairColor>
+      <eyeColor>GREEN</eyeColor>
+      <nationality>SPAIN</nationality>
+    </groupAdmin>
+    <formOfEducation>DISTANCE_EDUCATION</formOfEducation>
+  </StudyGroup>
+  <StudyGroup id="3">
+    <name>group 1</name>
+    <coordinates>
+      <x>1.0</x>
+      <y>1</y>
+    </coordinates>
+    <creationDate>1742995802.223990100</creationDate>
+    <studentsCount>1</studentsCount>
+    <transferredStudents>1</transferredStudents>
+    <semesterEnum>SECOND</semesterEnum>
+    <groupAdmin>
+      <name>Artem</name>
+      <passportID>Artem</passportID>
+      <hairColor>RED</hairColor>
+      <eyeColor>RED</eyeColor>
+      <nationality>USA</nationality>
+    </groupAdmin>
+    <formOfEducation/>
+  </StudyGroup>
+</StudyGroups>

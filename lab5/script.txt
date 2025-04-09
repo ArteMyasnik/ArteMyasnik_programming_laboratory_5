@@ -1,0 +1,21 @@
+show
+add
+group 2
+2
+sr5r6
+2
+2
+SECOND
+Anna
+Passport1
+RED
+RED
+USA
+FULL_TIME_EDUCATION
+
+
+show
+print_descending
+remove_by_id 1
+show
+info
