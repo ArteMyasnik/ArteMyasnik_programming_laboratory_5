@@ -1,4 +1,4 @@
-package com.artemyasnik.server;
+package com.artemyasnik.network.server;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
