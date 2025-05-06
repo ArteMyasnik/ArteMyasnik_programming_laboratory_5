@@ -1,4 +1,4 @@
-package com.artemyasnik.client;
+package com.artemyasnik.network.client;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;

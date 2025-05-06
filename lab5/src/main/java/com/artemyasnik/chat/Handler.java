@@ -24,7 +24,7 @@ public final class Handler implements Runnable {
     @Override
     public void run() {
         CollectionManager.getInstance();
-        console.writeln("Welcome to lab5 by ArteMyasnik!");
+        console.writeln("Welcome to lab6 by ArteMyasnik!");
         try {
             String line;
             while ((line = console.read("$ ")) != null) {
