@@ -2,10 +2,11 @@ package com.artemyasnik.io.transfer;
 
 import com.artemyasnik.collection.classes.StudyGroup;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 
-public record Response(String message, List<StudyGroup> studyGroup, String script) {
+public record Response(String message, List<StudyGroup> studyGroup, String script) implements Serializable {
     public static Response empty() {
         return new Response(null, Collections.emptyList(), null);
     }

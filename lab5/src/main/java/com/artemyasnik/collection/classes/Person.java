@@ -6,11 +6,12 @@ import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.io.Serializable;
 import java.util.Objects;
 
 @Getter
 @JacksonXmlRootElement(localName = "Person")
-public class Person {
+public class Person implements Serializable {
     @JacksonXmlProperty(localName = "name")
     private String name; //Поле не может быть null, Строка не может быть пустой
     @JacksonXmlProperty(localName = "passportID")

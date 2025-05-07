@@ -1,40 +1,126 @@
 package com.artemyasnik.network.server;
 
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
+import com.artemyasnik.io.transfer.Request;
+import com.artemyasnik.io.transfer.Response;
+import com.artemyasnik.io.workers.console.ConsoleWorker;
 
-public class Server {
-    public static void main(String[] args) {
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+
+public class Server implements Runnable, AutoCloseable {
+    private final ServerConfiguration config;
+    private final ConsoleWorker console;
+    private DatagramChannel channel;
+    private Selector selector;
+    private volatile boolean running = true;
+
+    public Server(ServerConfiguration config, ConsoleWorker console) {
+        this.config = config;
+        this.console = console;
+    }
+
+    @Override
+    public void run() {
         try {
-            byte[] buffer = new byte[10];  // Буфер для приема данных
-            int port = 6789;  // Порт сервера
+            channel = DatagramChannel.open();
+            channel.configureBlocking(false);
+            channel.bind(new InetSocketAddress(config.port()));
 
-            // Создаем UDP-сокет на указанном порту
-            DatagramSocket socket = new DatagramSocket(port);
-            System.out.println("Сервер запущен и ожидает данные...");
+            selector = Selector.open();
+            channel.register(selector, SelectionKey.OP_READ);
 
-            // Пакет для приема данных
-            DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
-            socket.receive(receivePacket);  // Ожидаем данные от клиента
+            console.writeln("Сервер запущен с конфигурацией: " + config);
 
-            // Умножаем каждый байт на 2
-            for (int i = 0; i < buffer.length; i++) {
-                buffer[i] *= 2;
+            ByteBuffer buffer = ByteBuffer.allocate(config.bufferSize());
+
+            while (running) {
+                int readyChannels = selector.select(1000); // Таймаут 1 сек для graceful shutdown
+                if (readyChannels == 0) continue;
+
+                var keys = selector.selectedKeys().iterator();
+                while (keys.hasNext()) {
+                    SelectionKey key = keys.next();
+                    keys.remove();
+
+                    if (key.isReadable()) {
+                        handleRequest(buffer);
+                    }
+                }
             }
+        } catch (IOException e) {
+            console.writeln("Ошибка сервера: " + e.getMessage());
+        } finally {
+            close();
+        }
+    }
 
-            // Получаем адрес и порт клиента
-            InetAddress clientAddress = receivePacket.getAddress();
-            int clientPort = receivePacket.getPort();
+    private void handleRequest(ByteBuffer buffer) throws IOException {
+        buffer.clear();
+        InetSocketAddress clientAddress = (InetSocketAddress) channel.receive(buffer);
 
-            // Отправляем измененные данные обратно клиенту
-            DatagramPacket sendPacket = new DatagramPacket(buffer, buffer.length, clientAddress, clientPort);
-            socket.send(sendPacket);
-            System.out.println("Данные отправлены клиенту.");
+        if (clientAddress != null) {
+            try {
+                buffer.flip();
+                Request request = deserializeRequest(buffer);
+                console.writeln("Получен запрос от %s: %s", String.valueOf(clientAddress), request.command());
 
-            socket.close();  // Закрываем сокет
-        } catch (Exception e) {
-            e.printStackTrace();
+                Response response = processRequest(request);
+                sendResponse(response, clientAddress, buffer);
+            } catch (ClassNotFoundException e) {
+                console.writeln("Ошибка десериализации: " + e.getMessage());
+            }
+        }
+    }
+
+    private Request deserializeRequest(ByteBuffer buffer) throws IOException, ClassNotFoundException {
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(buffer.array(), 0, buffer.limit());
+             ObjectInputStream ois = new ObjectInputStream(bais)) {
+            return (Request) ois.readObject();
+        }
+    }
+
+    private void sendResponse(Response response, InetSocketAddress clientAddress, ByteBuffer buffer) throws IOException {
+        byte[] responseBytes = serializeResponse(response);
+        buffer.clear();
+        buffer.put(responseBytes);
+        buffer.flip();
+        channel.send(buffer, clientAddress);
+    }
+
+    private byte[] serializeResponse(Response response) throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+            oos.writeObject(response);
+            return baos.toByteArray();
+        }
+    }
+
+    private Response processRequest(Request request) {
+        // Ваша логика обработки запроса-------------------------------------------------------------------------------
+        return new Response("Обработана команда: " + request.command());
+    }
+
+    public void stop() {
+        running = false;
+    }
+
+    @Override
+    public void close() {
+        running = false;
+        try {
+            if (selector != null) selector.close();
+            if (channel != null) channel.close();
+            console.writeln("Сервер остановлен");
+        } catch (IOException e) {
+            console.writeln("Ошибка при закрытии ресурсов: " + e.getMessage());
         }
     }
 }

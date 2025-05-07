@@ -5,11 +5,12 @@ import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.io.Serializable;
 import java.util.Objects;
 
 @Getter
 @JacksonXmlRootElement(localName = "Coordinates")
-public class Coordinates {
+public class Coordinates implements Serializable {
     @JacksonXmlProperty(localName = "x")
     private Double x; //Поле не может быть null
     @Setter
