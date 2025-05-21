@@ -3,6 +3,7 @@ package com.artemyasnik.network.server;
 import com.artemyasnik.io.transfer.Request;
 import com.artemyasnik.io.transfer.Response;
 import com.artemyasnik.io.workers.console.ConsoleWorker;
+import org.apache.commons.lang3.SerializationUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -37,12 +38,12 @@ public class Server implements Runnable, AutoCloseable {
             selector = Selector.open();
             channel.register(selector, SelectionKey.OP_READ);
 
-            console.writeln("Сервер запущен с конфигурацией: " + config);
+            console.writeln("Server started with configuration: " + config);
 
             ByteBuffer buffer = ByteBuffer.allocate(config.bufferSize());
 
             while (running) {
-                int readyChannels = selector.select(1000); // Таймаут 1 сек для graceful shutdown
+                int readyChannels = selector.select(1000);
                 if (readyChannels == 0) continue;
 
                 var keys = selector.selectedKeys().iterator();
@@ -56,7 +57,7 @@ public class Server implements Runnable, AutoCloseable {
                 }
             }
         } catch (IOException e) {
-            console.writeln("Ошибка сервера: " + e.getMessage());
+            console.writeln("Server error: " + e.getMessage());
         } finally {
             close();
         }
@@ -69,43 +70,28 @@ public class Server implements Runnable, AutoCloseable {
         if (clientAddress != null) {
             try {
                 buffer.flip();
-                Request request = deserializeRequest(buffer);
-                console.writeln("Получен запрос от %s: %s", String.valueOf(clientAddress), request.command());
+                Request request = SerializationUtils.deserialize(buffer.array());
+                console.writeln("Received request from %s: %s", String.valueOf(clientAddress), request.command());
 
                 Response response = processRequest(request);
                 sendResponse(response, clientAddress, buffer);
             } catch (ClassNotFoundException e) {
-                console.writeln("Ошибка десериализации: " + e.getMessage());
+                console.writeln("Deserialization error: " + e.getMessage());
             }
         }
     }
 
-    private Request deserializeRequest(ByteBuffer buffer) throws IOException, ClassNotFoundException {
-        try (ByteArrayInputStream bais = new ByteArrayInputStream(buffer.array(), 0, buffer.limit());
-             ObjectInputStream ois = new ObjectInputStream(bais)) {
-            return (Request) ois.readObject();
-        }
-    }
-
     private void sendResponse(Response response, InetSocketAddress clientAddress, ByteBuffer buffer) throws IOException {
-        byte[] responseBytes = serializeResponse(response);
+        byte[] responseBytes = SerializationUtils.serialize(response);
         buffer.clear();
         buffer.put(responseBytes);
         buffer.flip();
         channel.send(buffer, clientAddress);
     }
 
-    private byte[] serializeResponse(Response response) throws IOException {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             ObjectOutputStream oos = new ObjectOutputStream(baos)) {
-            oos.writeObject(response);
-            return baos.toByteArray();
-        }
-    }
-
     private Response processRequest(Request request) {
         // Ваша логика обработки запроса-------------------------------------------------------------------------------
-        return new Response("Обработана команда: " + request.command());
+        return new Response("Command processed: " + request.command());
     }
 
     public void stop() {
@@ -118,9 +104,9 @@ public class Server implements Runnable, AutoCloseable {
         try {
             if (selector != null) selector.close();
             if (channel != null) channel.close();
-            console.writeln("Сервер остановлен");
+            console.writeln("Server stopped");
         } catch (IOException e) {
-            console.writeln("Ошибка при закрытии ресурсов: " + e.getMessage());
+            console.writeln("Error closing resources: " + e.getMessage());
         }
     }
 }

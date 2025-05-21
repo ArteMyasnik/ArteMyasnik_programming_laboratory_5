@@ -1,8 +1,13 @@
 package com.artemyasnik.network.client;
 
+import com.artemyasnik.chat.Router;
+import com.artemyasnik.collection.classes.StudyGroup;
+import com.artemyasnik.io.IOWorker;
 import com.artemyasnik.io.transfer.Request;
 import com.artemyasnik.io.transfer.Response;
+import com.artemyasnik.io.workers.DequeWorker;
 import com.artemyasnik.io.workers.console.ConsoleWorker;
+import org.apache.commons.lang3.SerializationUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -14,17 +19,24 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
+
+import static com.artemyasnik.collection.util.InputUtil.get;
 
 public class Client implements Runnable {
     private final ClientConfiguration config;
     private final ConsoleWorker console;
+    private final IOWorker<String> script;
     private DatagramChannel channel;
     private Selector selector;
 
-    public Client(ClientConfiguration config, ConsoleWorker console) {
+    public Client(ClientConfiguration config, ConsoleWorker console, IOWorker<String> script) {
         this.config = config;
         this.console = console;
+        this.script = script;
     }
 
     @Override
@@ -37,89 +49,108 @@ public class Client implements Runnable {
             selector = Selector.open();
             channel.register(selector, SelectionKey.OP_READ);
 
-            console.writeln("Клиент запущен с конфигурацией: " + config);
+            console.writeln("Client started with configuration: " + config);
 
-            ByteBuffer buffer = ByteBuffer.allocate(config.bufferSize());
-
-            while (true) {
-                String command = console.read("Введите команду (или 'exit' для выхода): ");
-                if ("exit".equalsIgnoreCase(command)) {
-                    break;
+            try {
+                console.writeln("Welcome to lab6 by ArteMyasnik!");
+                String line;
+                while ((line = console.read("$ ")) != null) {
+                    handleInput(line);
+                    while (!script.ready()) handleInput(script.read());
                 }
-
-                Request request = new Request(command, List.of(), List.of());
-                sendRequest(request, buffer);
-
-                Response response = receiveResponse(buffer);
-                if (response != null) {
-                    console.writeln("Ответ сервера: " + response.message());
-                }
+            } catch (Exception e) {
+                console.writef("Error: %s%n" + e.getMessage());
             }
         } catch (IOException e) {
-            console.writeln("Ошибка клиента: " + e.getMessage());
+            console.writeln("Client error: " + e.getMessage());
         } finally {
             closeResources();
         }
     }
 
-    private void sendRequest(Request request, ByteBuffer buffer) throws IOException {
-        byte[] requestBytes = serializeRequest(request);
-        buffer.clear();
-        buffer.put(requestBytes);
-        buffer.flip();
-        channel.write(buffer);
+    private void handleInput(String line) throws IOException {
+        if (line == null || line.isBlank()) return;
+        if (line.equalsIgnoreCase("exit")) {
+            closeResources();
+            System.exit(0);
+        }
+
+        Request request = parseRequest(line);
+        if (request == null) return;
+        sendRequest(request);
+
+        Response response = receiveResponse();
+        handleResponse(response);
     }
 
-    private Response receiveResponse(ByteBuffer buffer) throws IOException {
-        int attempts = 3;
-        while (attempts-- > 0) {
-            int ready = selector.select(3000); // Таймаут 3 секунды
-            if (ready > 0) {
-                var keys = selector.selectedKeys().iterator();
-                while (keys.hasNext()) {
-                    SelectionKey key = keys.next();
-                    keys.remove();
+    private Request parseRequest(final String line) {
+        final String[] parts = line.split(" ", 2);
 
-                    if (key.isReadable()) {
-                        buffer.clear();
-                        channel.read(buffer);
-                        buffer.flip();
-                        try {
-                            return deserializeResponse(buffer);
-                        } catch (ClassNotFoundException e) {
-                            console.writeln("Ошибка десериализации ответа: " + e.getMessage());
-                        }
-                    }
-                }
-            } else {
-                console.writeln("Таймаут ожидания ответа. Осталось попыток: " + attempts);
+        String command = parts[0];
+        List<String> args = parts.length > 1 ? Arrays.asList(parts[1].split(" ")) : Collections.emptyList();
+        final List<StudyGroup> studyGroup = new LinkedList<>();
+
+        int elementRequired = Router.getInstance().getElementRequired(command);
+
+        while (elementRequired-- > 0) {
+            try {
+                studyGroup.add(get(script.ready() ? console : script));
+            } catch (InterruptedException e) {
+                console.writeln("%nCommand interrupted: %s%n".formatted(e.getMessage()));
+                return null;
+            } catch (IOException ex) {
+                console.writeln("IOException: %s".formatted(ex.getMessage()));
+                return null;
             }
         }
-        return null;
+
+        return new Request(command, args, studyGroup);
     }
 
-    private byte[] serializeRequest(Request request) throws IOException {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             ObjectOutputStream oos = new ObjectOutputStream(baos)) {
-            oos.writeObject(request);
-            return baos.toByteArray();
+    private void sendRequest(Request request) throws IOException {
+        byte[] requestBytes = SerializationUtils.serialize(request);
+        ByteBuffer buffer = ByteBuffer.allocate(4 + requestBytes.length);
+        buffer.put(requestBytes);
+        buffer.flip();
+        while (buffer.hasRemaining()) {
+            channel.write(buffer);
         }
     }
 
-    private Response deserializeResponse(ByteBuffer buffer) throws IOException, ClassNotFoundException {
-        try (ByteArrayInputStream bais = new ByteArrayInputStream(buffer.array(), 0, buffer.limit());
-             ObjectInputStream ois = new ObjectInputStream(bais)) {
-            return (Response) ois.readObject();
+    private Response receiveResponse() throws IOException {
+        ByteBuffer lengthBuffer = ByteBuffer.allocate(4);
+        readFromChannel(lengthBuffer);
+        lengthBuffer.flip();
+        int messageLength = lengthBuffer.getInt();
+        ByteBuffer allocated = ByteBuffer.allocate(messageLength);
+        readFromChannel(allocated);
+        allocated.flip();
+        return SerializationUtils.deserialize(allocated.array());
+    }
+
+    private void readFromChannel(ByteBuffer buffer) throws IOException {
+        while (buffer.hasRemaining()) {
+            int bytesRead = channel.read(buffer);
+            if (bytesRead == -1) {
+                throw new IOException("Server has closed the connection");
+            }
         }
+    }
+
+    private void handleResponse(Response response) {
+        if (response.message() != null && !response.message().isBlank()) console.writeln(response.message());
+        if (response.studyGroup() != null && !response.studyGroup().isEmpty())
+            response.studyGroup().stream().map(StudyGroup::toString).forEach(console::writeln);
+        if (response.script() != null && !response.script().isEmpty()) script.insert(response.script());
     }
 
     private void closeResources() {
         try {
             if (selector != null) selector.close();
-            if (channel != null) channel.close();
-            console.writeln("Клиент остановлен");
+            if (channel != null && channel.isOpen()) channel.close();
+            console.writeln("Client stopped");
         } catch (IOException e) {
-            console.writeln("Ошибка при закрытии ресурсов: " + e.getMessage());
+            console.writeln("Error closing resources: " + e.getMessage());
         }
     }
 }
