@@ -129,11 +129,4 @@ public final class CollectionManager {
             return "Collection remove_head failed";
         }
     }
-
-//    public String print_descending() {
-//        Iterator<StudyGroup> collection_desceding = collection.iterator();
-//        List<StudyGroup> sorted = new ArrayList<>(collection);
-//        sorted.sort(Collections.reverseOrder());
-//        return "Collection in the descending order:  " + sorted;
-//    }
 }

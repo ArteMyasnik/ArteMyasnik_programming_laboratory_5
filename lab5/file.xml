@@ -1,59 +1,47 @@
 <StudyGroups>
   <StudyGroup id="1">
-    <name>Group1</name>
+    <name>a</name>
     <coordinates>
-      <x>10.5</x>
-      <y>100</y>
+      <x>2.0</x>
+      <y>2</y>
     </coordinates>
-    <creationDate>1696161600.000000000</creationDate>
-    <studentsCount>30</studentsCount>
-    <transferredStudents>10</transferredStudents>
-    <semesterEnum>SECOND</semesterEnum>
-    <groupAdmin>
-      <name>Admin1</name>
-      <passportID>12345</passportID>
-      <hairColor>BLUE</hairColor>
-      <eyeColor>BLUE</eyeColor>
-      <nationality>USA</nationality>
-    </groupAdmin>
-    <formOfEducation>FULL_TIME_EDUCATION</formOfEducation>
-  </StudyGroup>
-  <StudyGroup id="2">
-    <name>Group2</name>
-    <coordinates>
-      <x>15.0</x>
-      <y>200</y>
-    </coordinates>
-    <creationDate>1696248000.000000000</creationDate>
-    <studentsCount>25</studentsCount>
-    <transferredStudents>5</transferredStudents>
+    <creationDate>1749031765.655625600</creationDate>
+    <studentsCount>2</studentsCount>
+    <transferredStudents>2</transferredStudents>
     <semesterEnum>SEVENTH</semesterEnum>
     <groupAdmin>
-      <name>Admin2</name>
-      <passportID>67890</passportID>
-      <hairColor>RED</hairColor>
-      <eyeColor>GREEN</eyeColor>
-      <nationality>SPAIN</nationality>
+      <name/>
+      <passportID/>
+      <hairColor/>
+      <eyeColor/>
+      <nationality/>
     </groupAdmin>
-    <formOfEducation>DISTANCE_EDUCATION</formOfEducation>
+    <formOfEducation/>
   </StudyGroup>
-  <StudyGroup id="3">
-    <name>group 1</name>
+  <StudyGroup id="1">
+    <name>a</name>
     <coordinates>
       <x>1.0</x>
       <y>1</y>
     </coordinates>
-    <creationDate>1742995802.223990100</creationDate>
+    <creationDate>1749336201.304730900</creationDate>
     <studentsCount>1</studentsCount>
     <transferredStudents>1</transferredStudents>
     <semesterEnum>SECOND</semesterEnum>
-    <groupAdmin>
-      <name>Artem</name>
-      <passportID>Artem</passportID>
-      <hairColor>RED</hairColor>
-      <eyeColor>RED</eyeColor>
-      <nationality>USA</nationality>
-    </groupAdmin>
+    <groupAdmin/>
+    <formOfEducation/>
+  </StudyGroup>
+  <StudyGroup id="2">
+    <name>a</name>
+    <coordinates>
+      <x>0.0</x>
+      <y>0</y>
+    </coordinates>
+    <creationDate>1749336227.562406100</creationDate>
+    <studentsCount>9</studentsCount>
+    <transferredStudents>9</transferredStudents>
+    <semesterEnum>SECOND</semesterEnum>
+    <groupAdmin/>
     <formOfEducation/>
   </StudyGroup>
 </StudyGroups>

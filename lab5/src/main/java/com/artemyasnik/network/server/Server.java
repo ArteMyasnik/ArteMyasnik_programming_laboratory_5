@@ -1,112 +1,161 @@
 package com.artemyasnik.network.server;
 
+import com.artemyasnik.chat.Router;
 import com.artemyasnik.io.transfer.Request;
 import com.artemyasnik.io.transfer.Response;
 import com.artemyasnik.io.workers.console.ConsoleWorker;
 import org.apache.commons.lang3.SerializationUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
+import java.util.Iterator;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public class Server implements Runnable, AutoCloseable {
+public final class Server implements Runnable, AutoCloseable {
+    private final static Logger log = LoggerFactory.getLogger(Server.class);
     private final ServerConfiguration config;
     private final ConsoleWorker console;
     private DatagramChannel channel;
     private Selector selector;
-    private volatile boolean running = true;
+    private final AtomicBoolean isRunning = new AtomicBoolean(true);
+    private final Queue<ByteBuffer> bufferPool = new ConcurrentLinkedQueue<>();
+    private final Queue<ClientResponse> responseQueue = new ConcurrentLinkedQueue<>();
 
     public Server(ServerConfiguration config, ConsoleWorker console) {
         this.config = config;
         this.console = console;
+        initServer();
     }
 
-    @Override
-    public void run() {
+    private void initServer() {
         try {
             channel = DatagramChannel.open();
             channel.configureBlocking(false);
             channel.bind(new InetSocketAddress(config.port()));
 
             selector = Selector.open();
-            channel.register(selector, SelectionKey.OP_READ);
+            channel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 
-            console.writeln("Server started with configuration: " + config);
+            log.info("Server started with configuration: {}", config);
+        } catch (IOException e) {
+            log.error("Server initiation error: {}", e.getMessage());
+        }
+    }
 
-            ByteBuffer buffer = ByteBuffer.allocate(config.bufferSize());
+    private ByteBuffer getBuffer() {
+        ByteBuffer buf = bufferPool.poll();
+        return buf != null ? buf : ByteBuffer.allocate(config.bufferSize());
+    }
 
-            while (running) {
+    private void releaseBuffer(ByteBuffer buffer) {
+        buffer.clear();
+        bufferPool.offer(buffer);
+    }
+
+    @Override
+    public void run() {
+        try {
+            while (isRunning.get()) {
                 int readyChannels = selector.select(1000);
                 if (readyChannels == 0) continue;
 
-                var keys = selector.selectedKeys().iterator();
-                while (keys.hasNext()) {
-                    SelectionKey key = keys.next();
-                    keys.remove();
+                Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
+                while (keyIterator.hasNext()) {
+                    SelectionKey key = keyIterator.next();
+                    keyIterator.remove();
 
                     if (key.isReadable()) {
-                        handleRequest(buffer);
+                        handleRequest(key);
+                    }
+
+                    if (key.isWritable()) {
+                        handleResponse(key);
                     }
                 }
             }
         } catch (IOException e) {
-            console.writeln("Server error: " + e.getMessage());
+            log.error("Server running error: {}", e.getMessage());
         } finally {
             close();
         }
     }
 
-    private void handleRequest(ByteBuffer buffer) throws IOException {
-        buffer.clear();
-        InetSocketAddress clientAddress = (InetSocketAddress) channel.receive(buffer);
+    private void handleRequest(SelectionKey key) throws IOException {
+        ByteBuffer buffer = getBuffer();
+        try {
+            buffer.clear();
+            InetSocketAddress clientAddress = (InetSocketAddress) channel.receive(buffer);
 
-        if (clientAddress != null) {
-            try {
+            if (clientAddress != null) {
                 buffer.flip();
                 Request request = SerializationUtils.deserialize(buffer.array());
-                console.writeln("Received request from %s: %s", String.valueOf(clientAddress), request.command());
+                log.info("Received request from {}: {} - {}", String.valueOf(clientAddress), request.command(), request);
 
+                log.info("Command received: {}", request.command());
                 Response response = processRequest(request);
-                sendResponse(response, clientAddress, buffer);
-            } catch (ClassNotFoundException e) {
-                console.writeln("Deserialization error: " + e.getMessage());
+                log.info("Response: {}", response);
+                responseQueue.add(new ClientResponse(response, clientAddress));
+                key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+//                sendResponse(response, clientAddress, buffer);
             }
+        } finally {
+            releaseBuffer(buffer);
         }
     }
 
-    private void sendResponse(Response response, InetSocketAddress clientAddress, ByteBuffer buffer) throws IOException {
-        byte[] responseBytes = SerializationUtils.serialize(response);
-        buffer.clear();
-        buffer.put(responseBytes);
-        buffer.flip();
-        channel.send(buffer, clientAddress);
+    private Response processRequest(Request request) {
+        return Router.getInstance().route(request);
     }
 
-    private Response processRequest(Request request) {
-        // Ваша логика обработки запроса-------------------------------------------------------------------------------
-        return new Response("Command processed: " + request.command());
+    private void handleResponse(SelectionKey key) throws IOException {
+        if (!responseQueue.isEmpty()) {
+            ClientResponse clientResponse = responseQueue.poll();
+            sendResponse(clientResponse);
+        }
+
+        if (responseQueue.isEmpty()) {
+            key.interestOps(SelectionKey.OP_READ);
+        }
+
+    }
+
+    private void sendResponse(ClientResponse clientResponse) throws IOException {
+        ByteBuffer buffer = getBuffer();
+        try {
+            byte[] responseBytes = SerializationUtils.serialize(clientResponse.response());
+            buffer.clear();
+            buffer.put(responseBytes);
+            buffer.flip();
+            channel.send(buffer, clientResponse.address());
+        } finally {
+            releaseBuffer(buffer);
+        }
     }
 
     public void stop() {
-        running = false;
+        isRunning.set(false);
     }
 
     @Override
     public void close() {
-        running = false;
+        isRunning.set(false);
         try {
             if (selector != null) selector.close();
             if (channel != null) channel.close();
-            console.writeln("Server stopped");
+            log.warn("Server stopped");
         } catch (IOException e) {
-            console.writeln("Error closing resources: " + e.getMessage());
+            log.error("Error closing resources: {}", e.getMessage());
         }
+    }
+
+    private record ClientResponse(Response response, InetSocketAddress address) {
     }
 }

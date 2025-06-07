@@ -24,8 +24,9 @@ public final class InputUtil {
         while (!input("semester %s ".formatted(
                 Arrays.toString(Semester.values())), studyGroup::setSemesterEnum, Semester::valueOf, ioWorker));
 
-        Person person = new Person();
+
         if (ioWorker.read("Make group admin[y/n](n for null)").equals("y")) {
+            Person person = new Person();
             while (!input("Group admin name ", person::setName, Function.identity(), ioWorker));
             while (!input("passportID(type unique) ", person::setPassportID, Function.identity(), ioWorker));
             while (!input("hair color %s ".formatted(
@@ -40,7 +41,7 @@ public final class InputUtil {
 
         while (!input("form of education(skip if null) %s ".formatted(
                 Arrays.toString(FormOfEducation.values())), studyGroup::setFormOfEducation, FormOfEducation::valueOf, ioWorker));
-        studyGroup.setGroupAdmin(person);
+//        studyGroup.setGroupAdmin(person);
 
         return studyGroup;
     }

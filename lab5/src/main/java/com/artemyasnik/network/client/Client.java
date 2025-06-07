@@ -5,33 +5,24 @@ import com.artemyasnik.collection.classes.StudyGroup;
 import com.artemyasnik.io.IOWorker;
 import com.artemyasnik.io.transfer.Request;
 import com.artemyasnik.io.transfer.Response;
-import com.artemyasnik.io.workers.DequeWorker;
 import com.artemyasnik.io.workers.console.ConsoleWorker;
 import org.apache.commons.lang3.SerializationUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.DatagramChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
+import java.net.*;
+import java.util.*;
 
 import static com.artemyasnik.collection.util.InputUtil.get;
 
-public class Client implements Runnable {
+public final class Client implements Runnable {
+    private final static Logger log = LoggerFactory.getLogger(Client.class);
     private final ClientConfiguration config;
     private final ConsoleWorker console;
     private final IOWorker<String> script;
-    private DatagramChannel channel;
-    private Selector selector;
+    private DatagramSocket socket;
+    private InetSocketAddress serverAddress;
 
     public Client(ClientConfiguration config, ConsoleWorker console, IOWorker<String> script) {
         this.config = config;
@@ -42,33 +33,25 @@ public class Client implements Runnable {
     @Override
     public void run() {
         try {
-            channel = DatagramChannel.open();
-            channel.configureBlocking(false);
-            channel.connect(new InetSocketAddress(config.host(), config.port()));
+            socket = new DatagramSocket();
+            serverAddress = new InetSocketAddress(config.host(), config.port());
 
-            selector = Selector.open();
-            channel.register(selector, SelectionKey.OP_READ);
+            log.info("Client started with configuration: {}", config);
 
-            console.writeln("Client started with configuration: " + config);
-
-            try {
-                console.writeln("Welcome to lab6 by ArteMyasnik!");
-                String line;
-                while ((line = console.read("$ ")) != null) {
-                    handleInput(line);
-                    while (!script.ready()) handleInput(script.read());
-                }
-            } catch (Exception e) {
-                console.writef("Error: %s%n" + e.getMessage());
+            console.writeln("Welcome to lab6 by ArteMyasnik!");
+            String line;
+            while ((line = console.read("$ ")) != null) {
+                handleInput(line);
+                while (!script.ready()) handleInput(script.read());
             }
         } catch (IOException e) {
-            console.writeln("Client error: " + e.getMessage());
+            log.error("Client error: {}", e.getMessage());
         } finally {
             closeResources();
         }
     }
 
-    private void handleInput(String line) throws IOException {
+    private void handleInput(String line) {
         if (line == null || line.isBlank()) return;
         if (line.equalsIgnoreCase("exit")) {
             closeResources();
@@ -77,10 +60,14 @@ public class Client implements Runnable {
 
         Request request = parseRequest(line);
         if (request == null) return;
-        sendRequest(request);
 
-        Response response = receiveResponse();
-        handleResponse(response);
+        try {
+            sendRequest(request);
+            Response response = receiveResponse();
+            handleResponse(response);
+        } catch (IOException e) {
+            log.error("Network error: {}", e.getMessage());
+        }
     }
 
     private Request parseRequest(final String line) {
@@ -96,10 +83,10 @@ public class Client implements Runnable {
             try {
                 studyGroup.add(get(script.ready() ? console : script));
             } catch (InterruptedException e) {
-                console.writeln("%nCommand interrupted: %s%n".formatted(e.getMessage()));
+                log.error("\nCommand interrupted: {}\n", e.getMessage());
                 return null;
             } catch (IOException ex) {
-                console.writeln("IOException: %s".formatted(ex.getMessage()));
+                log.error("IOException: {}", ex.getMessage());
                 return null;
             }
         }
@@ -109,32 +96,22 @@ public class Client implements Runnable {
 
     private void sendRequest(Request request) throws IOException {
         byte[] requestBytes = SerializationUtils.serialize(request);
-        ByteBuffer buffer = ByteBuffer.allocate(4 + requestBytes.length);
-        buffer.put(requestBytes);
-        buffer.flip();
-        while (buffer.hasRemaining()) {
-            channel.write(buffer);
-        }
+        DatagramPacket packet = new DatagramPacket(
+                requestBytes,
+                requestBytes.length,
+                serverAddress
+        );
+        socket.send(packet);
     }
 
     private Response receiveResponse() throws IOException {
-        ByteBuffer lengthBuffer = ByteBuffer.allocate(4);
-        readFromChannel(lengthBuffer);
-        lengthBuffer.flip();
-        int messageLength = lengthBuffer.getInt();
-        ByteBuffer allocated = ByteBuffer.allocate(messageLength);
-        readFromChannel(allocated);
-        allocated.flip();
-        return SerializationUtils.deserialize(allocated.array());
-    }
+        byte[] buffer = new byte[8192];
+        DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+        socket.receive(packet);
 
-    private void readFromChannel(ByteBuffer buffer) throws IOException {
-        while (buffer.hasRemaining()) {
-            int bytesRead = channel.read(buffer);
-            if (bytesRead == -1) {
-                throw new IOException("Server has closed the connection");
-            }
-        }
+        Response response = SerializationUtils.deserialize(packet.getData());
+//        log.info("Response received from server: {}", response);
+        return response;
     }
 
     private void handleResponse(Response response) {
@@ -145,12 +122,9 @@ public class Client implements Runnable {
     }
 
     private void closeResources() {
-        try {
-            if (selector != null) selector.close();
-            if (channel != null && channel.isOpen()) channel.close();
-            console.writeln("Client stopped");
-        } catch (IOException e) {
-            console.writeln("Error closing resources: " + e.getMessage());
+        if (socket != null && !socket.isClosed()) {
+            socket.close();
+            log.info("Client stopped");
         }
     }
 }

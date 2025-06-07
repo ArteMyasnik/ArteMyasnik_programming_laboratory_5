@@ -7,7 +7,7 @@ import com.artemyasnik.io.workers.console.BufferedConsoleWorker;
 import com.artemyasnik.network.client.ClientConfiguration;
 import com.artemyasnik.network.client.Client;
 
-public class ClientApp {
+public final class ClientApp {
     public static void main(String[] args) {
         ConsoleWorker consoleWorker = new BufferedConsoleWorker();
         IOWorker<String> script = new DequeWorker();
