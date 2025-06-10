@@ -26,6 +26,7 @@ public final class ServerApp {
         ServerConfiguration config = new ServerConfiguration(9876, 8192);
 
         try (Server server = new Server(config, consoleWorker)) {
+            server.registerShutdownHook();
             new Thread(server).start();
 
             consoleWorker.read("Press Enter to stop server..." + System.lineSeparator());

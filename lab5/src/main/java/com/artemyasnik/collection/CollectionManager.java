@@ -1,20 +1,26 @@
 package com.artemyasnik.collection;
 
 import com.artemyasnik.collection.classes.StudyGroup;
+import com.artemyasnik.collection.id.IdGenerator;
 import com.artemyasnik.collection.passport.PassportValidator;
 import com.artemyasnik.io.file.MyInputStreamReader;
 import com.artemyasnik.io.file.MyFileWriter;
 import com.artemyasnik.io.configuration.FileConfiguration;
 import com.artemyasnik.io.parser.XmlReader;
 import com.artemyasnik.io.parser.XmlWriter;
+import com.artemyasnik.io.transfer.Response;
 import lombok.Getter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.*;
 
 @Getter
 public final class CollectionManager {
-    private static CollectionManager instance;
+    private static CollectionManager INSTANCE;
+    private final static Logger log = LoggerFactory.getLogger(CollectionManager.class);
     private final List<StudyGroup> collection = new LinkedList<>();
     private final java.time.LocalDateTime initializationDate;
 
@@ -24,7 +30,7 @@ public final class CollectionManager {
     }
 
     public static CollectionManager getInstance() {
-        return instance == null ? instance = new CollectionManager() : instance;
+        return INSTANCE == null ? INSTANCE = new CollectionManager() : INSTANCE;
     }
 
     private void load() {
@@ -32,11 +38,37 @@ public final class CollectionManager {
             collection.clear();
             MyInputStreamReader myInputStreamReader = new MyInputStreamReader(FileConfiguration.DATA_FILE_PATH);
             XmlReader xmlReader = new XmlReader();
-            collection.addAll(xmlReader.parseXml(myInputStreamReader.readFile()));
+            List<StudyGroup> loadedGroups = xmlReader.parseXml(myInputStreamReader.readFile());
+
+            int maxId = loadedGroups.stream()
+                    .mapToInt(StudyGroup::getId)
+                    .max()
+                    .orElse(1);
+            if (loadedGroups.stream().anyMatch(g -> g.getId() == null || g.getId() < 1)) {
+                throw new IllegalArgumentException("Collection contains invalid IDs");
+            }
+
+            IdGenerator idGenerator = IdGenerator.getInstance();
+            idGenerator.initializeWith(maxId);
+
+            if (Files.size(FileConfiguration.ID_SEQ_FILE_PATH) == 0) {
+                idGenerator.saveLastId(maxId);
+                log.debug("Initialized ID sequence file with max ID: {}", maxId);
+            }
+
+            collection.addAll(loadedGroups);
+            log.info("Collection loaded successfully. Max ID: {}", maxId);
 //            return "Collection was loaded successfully";
-        } catch (IOException e) {
-            System.err.println(e.getMessage());
-//            return "Collection load failed";
+        } catch (IOException | IllegalArgumentException e) {
+            collection.clear();
+            log.error("Collection load failed: {}", e.getMessage());
+            try {
+                IdGenerator.getInstance().initializeWith(1);
+                log.debug("Initialized ID generator with default value 1");
+            } catch (Exception ex) {
+                log.error("Failed to initialize ID generator: {}", ex.getMessage());
+                //            return "Collection load failed";
+            }
         }
     }
 
@@ -61,9 +93,9 @@ public final class CollectionManager {
 
     public String show() {
         StringBuilder sb = new StringBuilder();
-        for (StudyGroup group : collection) {
-            sb.append(group.toString()).append(System.lineSeparator());
-        }
+        collection.stream()
+                .sorted(StudyGroup::compareTo)
+                .forEach(group -> sb.append(group.toString()).append(System.lineSeparator()));
         return "Collection: " + sb;
     }
 

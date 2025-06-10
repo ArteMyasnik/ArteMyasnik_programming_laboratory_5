@@ -26,8 +26,13 @@ public final class Server implements Runnable, AutoCloseable {
     private DatagramChannel channel;
     private Selector selector;
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
+    private final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
     private final Queue<ByteBuffer> bufferPool = new ConcurrentLinkedQueue<>();
     private final Queue<ClientResponse> responseQueue = new ConcurrentLinkedQueue<>();
+    private final static int MAX_BUFFER_POOL_SIZE = 50;
+    private final static int MAX_RESPONSE_QUEUE_SIZE = 1000;
+    private final static int MAX_RESPONSE_ATTEMPTS = 3;
+    private final static long GRACEFUL_SHUTDOWN_TIMEOUT = 5000;
 
     public Server(ServerConfiguration config, ConsoleWorker console) {
         this.config = config;
@@ -37,6 +42,7 @@ public final class Server implements Runnable, AutoCloseable {
 
     private void initServer() {
         try {
+            log.info("Initializing server...");
             channel = DatagramChannel.open();
             channel.configureBlocking(false);
             channel.bind(new InetSocketAddress(config.port()));
@@ -51,40 +57,48 @@ public final class Server implements Runnable, AutoCloseable {
     }
 
     private ByteBuffer getBuffer() {
-        ByteBuffer buf = bufferPool.poll();
-        return buf != null ? buf : ByteBuffer.allocate(config.bufferSize());
+        ByteBuffer buffer = bufferPool.poll();
+        return buffer != null ? buffer : ByteBuffer.allocate(config.bufferSize());
     }
 
     private void releaseBuffer(ByteBuffer buffer) {
+        if (buffer == null) return;
         buffer.clear();
-        bufferPool.offer(buffer);
+        if (bufferPool.size() < MAX_BUFFER_POOL_SIZE) {
+            bufferPool.offer(buffer);
+        }
     }
 
     @Override
     public void run() {
         try {
-            while (isRunning.get()) {
-                int readyChannels = selector.select(1000);
+            while (isRunning.get() || (isShuttingDown.get() && !responseQueue.isEmpty())) {
+                int readyChannels = selector.select(isShuttingDown.get() ? 100 : 1000);
                 if (readyChannels == 0) continue;
-
-                Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
-                while (keyIterator.hasNext()) {
-                    SelectionKey key = keyIterator.next();
-                    keyIterator.remove();
-
-                    if (key.isReadable()) {
-                        handleRequest(key);
-                    }
-
-                    if (key.isWritable()) {
-                        handleResponse(key);
-                    }
-                }
+                processSelectedKeys();
             }
         } catch (IOException e) {
-            log.error("Server running error: {}", e.getMessage());
+            if (!isShuttingDown.get()) {
+                log.error("Server shutting down error: {}", e.getMessage());
+            } else{
+                log.error("Server running error: {}", e.getMessage());
+            }
         } finally {
             close();
+        }
+    }
+
+    private void processSelectedKeys() throws IOException {
+        Iterator<SelectionKey> keyIterator = selector.selectedKeys().iterator();
+        while (keyIterator.hasNext()) {
+            SelectionKey key = keyIterator.next();
+            keyIterator.remove();
+            if (!key.isValid()) {
+                log.warn("Invalid key encountered: {}", key);
+                continue;
+            }
+            if (key.isReadable()) handleRequest(key);
+            if (key.isWritable()) handleResponse(key);
         }
     }
 
@@ -97,14 +111,18 @@ public final class Server implements Runnable, AutoCloseable {
             if (clientAddress != null) {
                 buffer.flip();
                 Request request = SerializationUtils.deserialize(buffer.array());
-                log.info("Received request from {}: {} - {}", String.valueOf(clientAddress), request.command(), request);
+                log.info("Received request from {}: {} - {}", clientAddress, request.command(), request);
 
-                log.info("Command received: {}", request.command());
                 Response response = processRequest(request);
                 log.info("Response: {}", response);
-                responseQueue.add(new ClientResponse(response, clientAddress));
-                key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-//                sendResponse(response, clientAddress, buffer);
+
+                if (responseQueue.size() >= MAX_RESPONSE_QUEUE_SIZE) {
+                    sendResponseImmediately(new Response("Server is busy, please try again later"), clientAddress);
+                    log.warn("Max response queue size reached");
+                } else {
+                    responseQueue.add(new ClientResponse(response, clientAddress));
+                    key.interestOps(SelectionKey.OP_WRITE); // SelectionKey.OP_READ |
+                }
             }
         } finally {
             releaseBuffer(buffer);
@@ -117,45 +135,122 @@ public final class Server implements Runnable, AutoCloseable {
 
     private void handleResponse(SelectionKey key) throws IOException {
         if (!responseQueue.isEmpty()) {
-            ClientResponse clientResponse = responseQueue.poll();
-            sendResponse(clientResponse);
+            ClientResponse clientResponse = responseQueue.peek();
+            if (sendResponse(clientResponse)) {
+                responseQueue.poll();
+            } else if (clientResponse.attemptCount() >= MAX_RESPONSE_ATTEMPTS) {
+                log.warn("Max attempts reached for {}", clientResponse.address());
+                responseQueue.poll();
+            } else {
+                responseQueue.poll();
+                responseQueue.add(clientResponse.withAttemptIncrement());
+                log.warn("Attempt {}: Server responding timeout", clientResponse.attemptCount());
+            }
         }
-
         if (responseQueue.isEmpty()) {
             key.interestOps(SelectionKey.OP_READ);
         }
 
     }
 
-    private void sendResponse(ClientResponse clientResponse) throws IOException {
+    private boolean sendResponse(ClientResponse clientResponse) throws IOException {
         ByteBuffer buffer = getBuffer();
         try {
             byte[] responseBytes = SerializationUtils.serialize(clientResponse.response());
             buffer.clear();
             buffer.put(responseBytes);
             buffer.flip();
-            channel.send(buffer, clientResponse.address());
+            int bytesSent = channel.send(buffer, clientResponse.address());
+            return bytesSent > 0;
         } finally {
             releaseBuffer(buffer);
         }
     }
 
+    private boolean sendResponseImmediately(Response response, InetSocketAddress address) {
+        ByteBuffer buffer = getBuffer();
+        try {
+            byte[] data = SerializationUtils.serialize(response);
+            buffer.clear();
+            buffer.put(data);
+            buffer.flip();
+            int bytesSent = channel.send(buffer, address);
+            return bytesSent > 0;
+        } catch (IOException e) {
+            log.error("Immediate send failed", e);
+        } finally {
+            releaseBuffer(buffer);
+        }
+        return false;
+    }
+
     public void stop() {
-        isRunning.set(false);
+        if (isShuttingDown.compareAndSet(false, true)) {
+            log.info("Initiating graceful shutdown...");
+            isRunning.set(false);
+            selector.wakeup();
+        }
     }
 
     @Override
     public void close() {
-        isRunning.set(false);
         try {
-            if (selector != null) selector.close();
+            log.info("Flushing remaining responses: {}", responseQueue.size());
+            flushRemainingResponses();
+            log.info("Closing resources...");
+            if (selector != null) {
+                try {
+                    if (selector.isOpen()) {
+                        selector.keys().forEach(SelectionKey::cancel);
+                        selector.close();
+                    }
+                } catch (IOException e) {
+                    log.error("Error closing selector: {}", e.getMessage());
+                }
+            }
             if (channel != null) channel.close();
-            log.warn("Server stopped");
+            log.info("Server stopped gracefully. Buffers in pool: {}", bufferPool.size());
         } catch (IOException e) {
-            log.error("Error closing resources: {}", e.getMessage());
+            log.error("Error during shutdown: {}", e.getMessage());
         }
     }
 
-    private record ClientResponse(Response response, InetSocketAddress address) {
+    private void flushRemainingResponses() {
+        if (selector == null || !selector.isOpen()) return;
+        int flushedCount = 0;
+        long startTime = System.currentTimeMillis();
+
+        while (!responseQueue.isEmpty() && (System.currentTimeMillis() - startTime) < GRACEFUL_SHUTDOWN_TIMEOUT) {
+            try {
+                ClientResponse clientResponse = responseQueue.poll();
+                if (clientResponse != null &&
+                        sendResponseImmediately(clientResponse.response(), clientResponse.address())) {
+                    flushedCount++;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to flush response: {}", e.getMessage());
+            }
+        }
+        if (!responseQueue.isEmpty()) {
+            log.warn("Failed to flush {} responses", responseQueue.size());
+        }
+        log.info("Flushed {} responses during shutdown", flushedCount);
+    }
+
+    public void registerShutdownHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            log.info("Received shutdown signal");
+            stop();
+        }));
+    }
+
+    private record ClientResponse(Response response, InetSocketAddress address, int attemptCount) {
+        public ClientResponse(Response response, InetSocketAddress address) {
+            this(response, address, 0);
+        }
+
+        public ClientResponse withAttemptIncrement() {
+            return new ClientResponse(response, address, attemptCount + 1);
+        }
     }
 }

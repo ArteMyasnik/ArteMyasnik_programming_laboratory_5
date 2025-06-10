@@ -7,7 +7,7 @@ import java.util.Set;
 
 @Getter
 public final class PassportValidator {
-    private static PassportValidator instance;
+    private static PassportValidator INSTANCE;
     private final Set<String> passportIDs;
 
     private PassportValidator() {
@@ -15,7 +15,7 @@ public final class PassportValidator {
     }
 
     public static PassportValidator getInstance() {
-        return instance == null ? instance = new PassportValidator() : instance;
+        return INSTANCE == null ? INSTANCE = new PassportValidator() : INSTANCE;
     }
 
     public boolean validate(String passportID) {

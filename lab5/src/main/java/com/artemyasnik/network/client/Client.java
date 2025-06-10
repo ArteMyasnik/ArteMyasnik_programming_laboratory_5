@@ -23,6 +23,8 @@ public final class Client implements Runnable {
     private final IOWorker<String> script;
     private DatagramSocket socket;
     private InetSocketAddress serverAddress;
+    private static final int RESPONSE_TIMEOUT = 5000;
+    private static final int MAX_REQUEST_ATTEMPTS = 3;
 
     public Client(ClientConfiguration config, ConsoleWorker console, IOWorker<String> script) {
         this.config = config;
@@ -34,6 +36,7 @@ public final class Client implements Runnable {
     public void run() {
         try {
             socket = new DatagramSocket();
+            socket.setSoTimeout(RESPONSE_TIMEOUT);
             serverAddress = new InetSocketAddress(config.host(), config.port());
 
             log.info("Client started with configuration: {}", config);
@@ -62,11 +65,16 @@ public final class Client implements Runnable {
         if (request == null) return;
 
         try {
-            sendRequest(request);
-            Response response = receiveResponse();
-            handleResponse(response);
+            Response response = sendRequestWithRetry(request);
+            if (response != null) {
+                handleResponse(response);
+            } else {
+                log.warn("Server is not responding, please try again later");
+                console.writeln("Server is not responding, please try again later");
+            }
         } catch (IOException e) {
             log.error("Network error: {}", e.getMessage());
+            console.writeln("Network error occurred: " + e.getMessage());
         }
     }
 
@@ -94,6 +102,22 @@ public final class Client implements Runnable {
         return new Request(command, args, studyGroup);
     }
 
+    private Response sendRequestWithRetry(Request request) throws IOException {
+        int attempts = 0;
+        while (true) {
+            attempts++;
+            try {
+                sendRequest(request);
+                return receiveResponse();
+            } catch (SocketTimeoutException e) {
+                log.warn("Attempt {}: Server response timeout", attempts);
+                if (attempts >= MAX_REQUEST_ATTEMPTS) {
+                    throw new IOException("Server is not responding after " + MAX_REQUEST_ATTEMPTS + " attempts");
+                }
+            }
+        }
+    }
+
     private void sendRequest(Request request) throws IOException {
         byte[] requestBytes = SerializationUtils.serialize(request);
         DatagramPacket packet = new DatagramPacket(
@@ -105,13 +129,10 @@ public final class Client implements Runnable {
     }
 
     private Response receiveResponse() throws IOException {
-        byte[] buffer = new byte[8192];
+        byte[] buffer = new byte[config.bufferSize()];
         DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
         socket.receive(packet);
-
-        Response response = SerializationUtils.deserialize(packet.getData());
-//        log.info("Response received from server: {}", response);
-        return response;
+        return SerializationUtils.deserialize(packet.getData());
     }
 
     private void handleResponse(Response response) {

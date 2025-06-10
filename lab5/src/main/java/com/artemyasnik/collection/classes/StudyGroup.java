@@ -1,6 +1,5 @@
 package com.artemyasnik.collection.classes;
 
-import com.artemyasnik.collection.id.IdGenerator;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 import lombok.Getter;
@@ -60,10 +59,6 @@ public class StudyGroup implements Comparable<StudyGroup>, Serializable {
         this.semesterEnum = semesterEnum;
     }
 
-    {
-        this.id = IdGenerator.getInstance().generateId();
-    }
-
     public void setId(Integer id) {
         if (id == null) throw new IllegalArgumentException("Id can't be null");
         if (id <= 0) throw new IllegalArgumentException("Id must be greater than zero");
@@ -85,7 +80,7 @@ public class StudyGroup implements Comparable<StudyGroup>, Serializable {
 
     @Override
     public int compareTo(StudyGroup o) {
-        return CharSequence.compare(this.getName().toLowerCase(), o.getName().toLowerCase());
+        return Integer.compare(this.getTransferredStudents(), o.getTransferredStudents());
     }
 
     @Override

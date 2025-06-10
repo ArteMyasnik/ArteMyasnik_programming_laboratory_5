@@ -2,44 +2,38 @@
   <StudyGroup id="1">
     <name>a</name>
     <coordinates>
-      <x>2.0</x>
-      <y>2</y>
+      <x>3.0</x>
+      <y>3</y>
     </coordinates>
-    <creationDate>1749031765.655625600</creationDate>
-    <studentsCount>2</studentsCount>
-    <transferredStudents>2</transferredStudents>
-    <semesterEnum>SEVENTH</semesterEnum>
-    <groupAdmin>
-      <name/>
-      <passportID/>
-      <hairColor/>
-      <eyeColor/>
-      <nationality/>
-    </groupAdmin>
+    <creationDate>1749379472.114408300</creationDate>
+    <studentsCount>3</studentsCount>
+    <transferredStudents>3</transferredStudents>
+    <semesterEnum>SECOND</semesterEnum>
+    <groupAdmin/>
     <formOfEducation/>
   </StudyGroup>
-  <StudyGroup id="1">
-    <name>a</name>
+  <StudyGroup id="20">
+    <name>ghbfvndkm</name>
     <coordinates>
-      <x>1.0</x>
-      <y>1</y>
+      <x>45.0</x>
+      <y>45</y>
     </coordinates>
-    <creationDate>1749336201.304730900</creationDate>
-    <studentsCount>1</studentsCount>
-    <transferredStudents>1</transferredStudents>
+    <creationDate>1749395703.551310900</creationDate>
+    <studentsCount>45</studentsCount>
+    <transferredStudents>45</transferredStudents>
     <semesterEnum>SECOND</semesterEnum>
     <groupAdmin/>
     <formOfEducation/>
   </StudyGroup>
   <StudyGroup id="2">
-    <name>a</name>
+    <name>sff</name>
     <coordinates>
-      <x>0.0</x>
-      <y>0</y>
+      <x>6.0</x>
+      <y>6</y>
     </coordinates>
-    <creationDate>1749336227.562406100</creationDate>
-    <studentsCount>9</studentsCount>
-    <transferredStudents>9</transferredStudents>
+    <creationDate>1749481944.215564500</creationDate>
+    <studentsCount>6</studentsCount>
+    <transferredStudents>6</transferredStudents>
     <semesterEnum>SECOND</semesterEnum>
     <groupAdmin/>
     <formOfEducation/>

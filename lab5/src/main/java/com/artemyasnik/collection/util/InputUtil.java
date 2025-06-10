@@ -1,6 +1,7 @@
 package com.artemyasnik.collection.util;
 
 import com.artemyasnik.collection.classes.*;
+import com.artemyasnik.collection.id.IdGenerator;
 import com.artemyasnik.io.IOWorker;
 
 import java.io.IOException;
@@ -36,12 +37,15 @@ public final class InputUtil {
             while (!input("nationality(skip if null) %s ".formatted(
                     Arrays.toString(Country.values())), person::setNationality, Country::valueOf, ioWorker));
             studyGroup.setGroupAdmin(person);
+        } else {
+            studyGroup.setGroupAdmin(null);
         }
-        studyGroup.setGroupAdmin(null);
 
         while (!input("form of education(skip if null) %s ".formatted(
                 Arrays.toString(FormOfEducation.values())), studyGroup::setFormOfEducation, FormOfEducation::valueOf, ioWorker));
-//        studyGroup.setGroupAdmin(person);
+
+        int newId = IdGenerator.getInstance().generateId();
+        studyGroup.setId(newId);
 
         return studyGroup;
     }
