@@ -1,64 +1,51 @@
 package com.artemyasnik.app;
 
-import com.artemyasnik.collection.CollectionManager;
-import com.artemyasnik.io.configuration.FileConfiguration;
 import com.artemyasnik.io.workers.console.ConsoleWorker;
 import com.artemyasnik.io.workers.console.BufferedConsoleWorker;
 import com.artemyasnik.network.server.ServerConfiguration;
 import com.artemyasnik.network.server.Server;
-
-import java.io.IOException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class ServerApp {
+    private static final Logger log = LoggerFactory.getLogger(ServerApp.class);
+
     public static void main(String[] args) {
-        if (args.length == 0) {
-            System.err.println("There is no data file. Type 'java -jar <jarFile>.jar <fileName>'");
-            System.exit(1);
-        }
-
-        if (args.length > 1) {
-            System.err.println("Too many arguments. Type 'java -jar <jarFile>.jar <fileName>'");
-            System.exit(1);
-        }
-
-        final String filePath = args[0];
-        FileConfiguration.getInstance();
-        FileConfiguration.initialize(filePath);
-
-        ConsoleWorker consoleWorker = new BufferedConsoleWorker();
         ServerConfiguration config = new ServerConfiguration(9876, 8192);
+        ConsoleWorker consoleWorker = new BufferedConsoleWorker();
 
         try (Server server = new Server(config, consoleWorker)) {
             server.registerShutdownHook();
-            new Thread(server).start();
 
-            consoleWorker.read("Press Enter to stop server..." + System.lineSeparator());
-            server.stop();
+            new Thread(server, "Server Thread").start();
+            consoleWorker.write("Server started.\n");
+            handleAdminCommands(server, consoleWorker);
+
+        } catch (Exception e) {
+            log.error("Server fatal error: {}", e.getMessage());
+            System.exit(1);
         }
+    }
 
-        try (Server server = new Server(config, consoleWorker)) {
-            server.registerShutdownHook();
-            new Thread(server).start();
-            consoleWorker.write("Server started. Type 'help' for available commands.\n");
+    private static void handleAdminCommands(Server server, ConsoleWorker consoleWorker) {
+        while (server.isRunning()) {
+            try {
+                String input = consoleWorker.read("$ ").trim().toLowerCase();
 
-            while (server.isRunning()) {
-                String input = consoleWorker.read("$ ");
-                if (input == null) continue;
-
-                input = input.trim().toLowerCase();
                 switch (input) {
                     case "exit":
                         consoleWorker.write("Shutting down server...\n");
                         server.stop();
                         break;
-                    case "save":
-                        consoleWorker.write("Saving data...\n");
-                        CollectionManager.getInstance().save();
-                        consoleWorker.write("Data saved successfully.\n");
+                    case "status":
+                        consoleWorker.write("Server status: " +
+                                (server.isRunning() ? "RUNNING" : "STOPPED") + "\n");
                         break;
                     default:
                         consoleWorker.write("Unknown command. Type 'help' for available commands.\n");
                 }
+            } catch (Exception e) {
+                log.warn("Error processing admin command: {}", e.getMessage());
             }
         }
     }

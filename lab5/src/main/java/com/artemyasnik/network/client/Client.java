@@ -65,7 +65,7 @@ public final class Client implements Runnable {
 
             String line;
             while ((line = console.read("$ ")) != null) {
-                final String currentLine = line; // Создаем final копию
+                final String currentLine = line;
                 requestReadingPool.submit(() -> handleInput(currentLine));
                 while (!script.ready()) {
                     String scriptLine = script.read();
@@ -87,7 +87,7 @@ public final class Client implements Runnable {
             console.writeln("2. Register");
             console.writeln("3. Exit");
 
-            String choice = console.read("> ").trim();
+            String choice = console.read("$ ").trim();
 
             try {
                 switch (choice) {
