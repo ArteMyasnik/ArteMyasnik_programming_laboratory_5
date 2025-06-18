@@ -4,6 +4,7 @@ import com.artemyasnik.chat.Router;
 import com.artemyasnik.io.transfer.Request;
 import com.artemyasnik.io.transfer.Response;
 import com.artemyasnik.io.workers.console.ConsoleWorker;
+import lombok.Getter;
 import org.apache.commons.lang3.SerializationUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +39,8 @@ public final class Server implements Runnable, AutoCloseable {
     private final static int MAX_RESPONSE_QUEUE_SIZE = 1000;
     private final static int MAX_RESPONSE_ATTEMPTS = 3;
     private final static long GRACEFUL_SHUTDOWN_TIMEOUT = 5000;
+    @Getter
+    private volatile boolean initializationFailed = false;
 
     public Server(ServerConfiguration config, ConsoleWorker console) {
         this.config = config;
@@ -50,17 +53,22 @@ public final class Server implements Runnable, AutoCloseable {
             log.info("Initializing server...");
             channel = DatagramChannel.open();
             channel.configureBlocking(false);
-            channel.bind(new InetSocketAddress(config.port()));
-
+            try {
+                channel.bind(new InetSocketAddress(config.port()));
+            } catch (IOException e) {
+                channel.close();
+                throw new IOException("Port " + config.port() + " is already in use", e);
+            }
             selector = Selector.open();
             channel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-
             startRequestProcessingThread();
             startResponseHandlingThread();
-
             log.info("Server started with configuration: {}", config);
         } catch (IOException e) {
+            initializationFailed = true;
             log.error("Server initiation error: {}", e.getMessage());
+            close();
+            throw new RuntimeException("Server initialization failed", e);
         }
     }
 

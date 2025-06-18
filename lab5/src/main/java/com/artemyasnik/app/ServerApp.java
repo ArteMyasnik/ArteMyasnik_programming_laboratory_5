@@ -10,19 +10,29 @@ import org.slf4j.LoggerFactory;
 public final class ServerApp {
     private static final Logger log = LoggerFactory.getLogger(ServerApp.class);
 
+    private static final Logger log = LoggerFactory.getLogger(ServerApp.class);
+
     public static void main(String[] args) {
         ServerConfiguration config = new ServerConfiguration(9876, 8192);
         ConsoleWorker consoleWorker = new BufferedConsoleWorker();
 
-        try (Server server = new Server(config, consoleWorker)) {
-            server.registerShutdownHook();
+        try {
+            Server server = new Server(config, consoleWorker);
 
-            new Thread(server, "Server Thread").start();
-            consoleWorker.write("Server started.\n");
-            handleAdminCommands(server, consoleWorker);
+            if (server.isInitializationFailed()) {
+                consoleWorker.write("Server initialization failed. See logs for details.\n");
+                System.exit(1);
+            }
 
+            try (server) {
+                server.registerShutdownHook();
+                new Thread(server, "Server Thread").start();
+                consoleWorker.write("Server started. Type 'help' for available commands.\n");
+                handleAdminCommands(server, consoleWorker);
+            }
         } catch (Exception e) {
             log.error("Server fatal error: {}", e.getMessage());
+            consoleWorker.write("Server failed to start: " + e.getMessage() + "\n");
             System.exit(1);
         }
     }
@@ -42,7 +52,7 @@ public final class ServerApp {
                                 (server.isRunning() ? "RUNNING" : "STOPPED") + "\n");
                         break;
                     default:
-                        consoleWorker.write("Unknown command. Type 'help' for available commands.\n");
+                        consoleWorker.write("Unknown command.\n");
                 }
             } catch (Exception e) {
                 log.warn("Error processing admin command: {}", e.getMessage());
