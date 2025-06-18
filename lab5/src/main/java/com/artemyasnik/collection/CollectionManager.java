@@ -75,14 +75,9 @@ public final class CollectionManager {
     public String add(StudyGroup studyGroup, int ownerId) {
         lock.lock();
         try {
-            // Сначала сохраняем в БД
             int newId = studyGroupDAO.saveAndReturnId(studyGroup, ownerId);
             studyGroup.setId(newId);
-
-            // Затем добавляем в коллекцию
             collection.add(studyGroup);
-
-            // Регистрируем passportID если есть администратор
             if (studyGroup.getGroupAdmin() != null) {
                 passportValidator.validate(studyGroup.getGroupAdmin().getPassportID());
             }
