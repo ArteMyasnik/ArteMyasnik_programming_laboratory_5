@@ -17,7 +17,6 @@ import java.net.*;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.artemyasnik.collection.util.InputUtil.get;
 
@@ -30,12 +29,9 @@ public final class Client implements Runnable {
     private InetSocketAddress serverAddress;
     private static final int RESPONSE_TIMEOUT = 5000;
     private static final int MAX_REQUEST_ATTEMPTS = 3;
-    private final ExecutorService requestReadingPool = Executors.newCachedThreadPool();
-    private final ForkJoinPool requestProcessingPool = new ForkJoinPool();
-    private final ForkJoinPool responseSendingPool = new ForkJoinPool();
-    private final Queue<Request> requestQueue = new ConcurrentLinkedQueue<>();
-    private final Queue<Response> responseQueue = new ConcurrentLinkedQueue<>();
-
+    private final ExecutorService requestSenderPool = Executors.newCachedThreadPool();
+    private final ForkJoinPool responseProcessorPool = new ForkJoinPool();
+    private final Queue<Response> responseQueue = new LinkedBlockingQueue<>();
     private final UserDAO userDAO = new UserDAO();
     private UserDTO currentUser;
 
@@ -60,18 +56,16 @@ public final class Client implements Runnable {
                 return;
             }
 
-            startRequestProcessingThread();
-            startResponseHandlingThread();
-
             String line;
             while ((line = console.read("$ ")) != null) {
                 final String currentLine = line;
-                requestReadingPool.submit(() -> handleInput(currentLine));
+                requestSenderPool.submit(() -> handleInput(currentLine));
                 while (!script.ready()) {
                     String scriptLine = script.read();
                     final String currentScriptLine = scriptLine;
-                    requestReadingPool.submit(() -> handleInput(currentScriptLine));
+                    requestSenderPool.submit(() -> handleInput(currentScriptLine));
                 }
+                processResponses();
             }
         } catch (IOException e) {
             log.error("Client error: {}", e.getMessage());
@@ -144,41 +138,6 @@ public final class Client implements Runnable {
         }
     }
 
-    private void startRequestProcessingThread() {
-        new Thread(() -> {
-            while (!Thread.currentThread().isInterrupted()) {
-                if (!requestQueue.isEmpty()) {
-                    Request request = requestQueue.poll();
-                    if (request != null) {
-                        requestProcessingPool.submit(() -> {
-                            try {
-                                Response response = sendRequestWithRetry(request);
-                                if (response != null) {
-                                    responseQueue.add(response);
-                                }
-                            } catch (IOException e) {
-                                log.error("Error processing request: {}", e.getMessage());
-                            }
-                        });
-                    }
-                }
-            }
-        }).start();
-    }
-
-    private void startResponseHandlingThread() {
-        new Thread(() -> {
-            while (!Thread.currentThread().isInterrupted()) {
-                if (!responseQueue.isEmpty()) {
-                    Response response = responseQueue.poll();
-                    if (response != null) {
-                        responseSendingPool.submit(() -> handleResponse(response));
-                    }
-                }
-            }
-        }).start();
-    }
-
     private void handleInput(String line) {
         if (line == null || line.isBlank()) return;
         if (line.equalsIgnoreCase("exit")) {
@@ -187,8 +146,28 @@ public final class Client implements Runnable {
         }
 
         Request request = parseRequest(line);
-        if (request != null) {
-            requestQueue.add(request);
+        if (request == null) return;
+
+        try {
+            Response response = sendRequestWithRetry(request);
+            if (response != null) {
+                responseQueue.offer(response);
+            } else {
+                log.warn("Server is not responding, please try again later");
+                console.writeln("Server is not responding, please try again later");
+            }
+        } catch (IOException e) {
+            log.error("Network error: {}", e.getMessage());
+            console.writeln("Network error occurred: " + e.getMessage());
+        }
+    }
+
+    private void processResponses() {
+        synchronized (responseQueue) {
+            while (!responseQueue.isEmpty()) {
+                Response response = responseQueue.poll();
+                responseProcessorPool.submit(() -> handleResponse(response));
+            }
         }
     }
 
@@ -217,17 +196,17 @@ public final class Client implements Runnable {
     }
 
     private Response sendRequestWithRetry(Request request) throws IOException {
-        AtomicInteger attempts = new AtomicInteger(0);
+        int attempts = 0;
         while (true) {
-            if (attempts.incrementAndGet() > MAX_REQUEST_ATTEMPTS) {
-                throw new IOException("Server is not responding after " + MAX_REQUEST_ATTEMPTS + " attempts");
-            }
-
+            attempts++;
             try {
                 sendRequest(request);
                 return receiveResponse();
             } catch (SocketTimeoutException e) {
-                log.warn("Attempt {}: Server response timeout", attempts.get());
+                log.warn("Attempt {}: Server response timeout", attempts);
+                if (attempts >= MAX_REQUEST_ATTEMPTS) {
+                    throw new IOException("Server is not responding after " + MAX_REQUEST_ATTEMPTS + " attempts");
+                }
             }
         }
     }
@@ -260,9 +239,8 @@ public final class Client implements Runnable {
         if (socket != null && !socket.isClosed()) {
             socket.close();
         }
-        requestReadingPool.shutdownNow();
-        requestProcessingPool.shutdownNow();
-        responseSendingPool.shutdownNow();
+        requestSenderPool.shutdownNow();
+        responseProcessorPool.shutdownNow();
         log.info("Client stopped");
     }
 }

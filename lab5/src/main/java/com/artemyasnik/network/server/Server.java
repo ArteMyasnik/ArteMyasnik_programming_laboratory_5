@@ -4,7 +4,6 @@ import com.artemyasnik.chat.Router;
 import com.artemyasnik.io.transfer.Request;
 import com.artemyasnik.io.transfer.Response;
 import com.artemyasnik.io.workers.console.ConsoleWorker;
-import lombok.Getter;
 import org.apache.commons.lang3.SerializationUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,8 +14,13 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
+import java.util.Collections;
 import java.util.Iterator;
-import java.util.concurrent.*;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class Server implements Runnable, AutoCloseable {
@@ -27,21 +31,15 @@ public final class Server implements Runnable, AutoCloseable {
     private Selector selector;
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
     private final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
-
-    // Thread pools
-    private final ExecutorService requestProcessingPool = Executors.newCachedThreadPool();
-    private final ForkJoinPool responseSendingPool = new ForkJoinPool();
-
-    // Synchronized collections
-    private final ConcurrentLinkedQueue<ByteBuffer> bufferPool = new ConcurrentLinkedQueue<>();
-    private final ConcurrentLinkedQueue<ClientResponse> responseQueue = new ConcurrentLinkedQueue<>();
-
+    private final Queue<ByteBuffer> bufferPool = new ConcurrentLinkedQueue<>();
+    private final Queue<ClientResponse> responseQueue = new ConcurrentLinkedQueue<>();
     private final static int MAX_BUFFER_POOL_SIZE = 50;
     private final static int MAX_RESPONSE_QUEUE_SIZE = 1000;
     private final static int MAX_RESPONSE_ATTEMPTS = 3;
     private final static long GRACEFUL_SHUTDOWN_TIMEOUT = 5000;
-    @Getter
-    private volatile boolean initializationFailed = false;
+    private final ExecutorService requestReaderPool = Executors.newCachedThreadPool();
+    private final ForkJoinPool requestProcessorPool = new ForkJoinPool();
+    private final ForkJoinPool responseSenderPool = new ForkJoinPool();
 
     public Server(ServerConfiguration config, ConsoleWorker console) {
         this.config = config;
@@ -54,20 +52,14 @@ public final class Server implements Runnable, AutoCloseable {
             log.info("Initializing server...");
             channel = DatagramChannel.open();
             channel.configureBlocking(false);
-            try {
-                channel.bind(new InetSocketAddress(config.port()));
-            } catch (IOException e) {
-                channel.close();
-                throw new IOException("Port " + config.port() + " is already in use", e);
-            }
+            channel.bind(new InetSocketAddress(config.port()));
+
             selector = Selector.open();
             channel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+
             log.info("Server started with configuration: {}", config);
         } catch (IOException e) {
-            initializationFailed = true;
             log.error("Server initiation error: {}", e.getMessage());
-            close();
-            throw new RuntimeException("Server initialization failed", e);
         }
     }
 
@@ -84,10 +76,6 @@ public final class Server implements Runnable, AutoCloseable {
         }
     }
 
-    public boolean isRunning() {
-        return isRunning.get();
-    }
-
     @Override
     public void run() {
         try {
@@ -98,9 +86,9 @@ public final class Server implements Runnable, AutoCloseable {
             }
         } catch (IOException e) {
             if (!isShuttingDown.get()) {
-                log.error("Server running error: {}", e.getMessage());
-            } else {
                 log.error("Server shutting down error: {}", e.getMessage());
+            } else {
+                log.error("Server running error: {}", e.getMessage());
             }
         } finally {
             close();
@@ -112,18 +100,27 @@ public final class Server implements Runnable, AutoCloseable {
         while (keyIterator.hasNext()) {
             SelectionKey key = keyIterator.next();
             keyIterator.remove();
-
             if (!key.isValid()) {
                 log.warn("Invalid key encountered: {}", key);
                 continue;
             }
-
             if (key.isReadable()) {
-                handleRequest(key);
+                requestReaderPool.submit(() -> {
+                    try {
+                        handleRequest(key);
+                    } catch (IOException e) {
+                        log.error("Error handling request: {}", e.getMessage());
+                    }
+                });
             }
-
             if (key.isWritable()) {
-                handleResponse(key);
+                responseSenderPool.submit(() -> {
+                    try {
+                        handleResponse(key);
+                    } catch (IOException e) {
+                        log.error("Error handling response: {}", e.getMessage());
+                    }
+                });
             }
         }
     }
@@ -138,17 +135,19 @@ public final class Server implements Runnable, AutoCloseable {
                 buffer.flip();
                 Request request = SerializationUtils.deserialize(buffer.array());
                 log.info("Received request from {}: {} - {}", clientAddress, request.command(), request);
-                requestProcessingPool.submit(() -> {
+
+                requestProcessorPool.submit(() -> {
                     Response response = processRequest(request);
                     log.info("Response: {}", response);
 
-                    if (responseQueue.size() >= MAX_RESPONSE_QUEUE_SIZE) {
-                        sendResponseImmediately(new Response("Server is busy, please try again later"), clientAddress);
-                        log.warn("Max response queue size reached");
-                    } else {
-                        responseQueue.add(new ClientResponse(response, clientAddress));
-                        key.interestOps(SelectionKey.OP_WRITE);
-                        selector.wakeup();
+                    synchronized (responseQueue) {
+                        if (responseQueue.size() >= MAX_RESPONSE_QUEUE_SIZE) {
+                            sendResponseImmediately(new Response("Server is busy, please try again later"), clientAddress);
+                            log.warn("Max response queue size reached");
+                        } else {
+                            responseQueue.add(new ClientResponse(response, clientAddress));
+                            key.interestOps(SelectionKey.OP_WRITE);
+                        }
                     }
                 });
             }
@@ -162,30 +161,23 @@ public final class Server implements Runnable, AutoCloseable {
     }
 
     private void handleResponse(SelectionKey key) throws IOException {
-        if (!responseQueue.isEmpty()) {
-            ClientResponse clientResponse = responseQueue.peek();
-
-            responseSendingPool.submit(() -> {
-                try {
-                    if (sendResponse(clientResponse)) {
-                        responseQueue.poll();
-                    } else if (clientResponse.attemptCount() >= MAX_RESPONSE_ATTEMPTS) {
-                        log.warn("Max attempts reached for {}", clientResponse.address());
-                        responseQueue.poll();
-                    } else {
-                        responseQueue.poll();
-                        responseQueue.add(clientResponse.withAttemptIncrement());
-                        log.warn("Attempt {}: Server responding timeout", clientResponse.attemptCount());
-                    }
-
-                    if (responseQueue.isEmpty()) {
-                        key.interestOps(SelectionKey.OP_READ);
-                        selector.wakeup();
-                    }
-                } catch (IOException e) {
-                    log.error("Error sending response: {}", e.getMessage());
+        synchronized (responseQueue) {
+            if (!responseQueue.isEmpty()) {
+                ClientResponse clientResponse = responseQueue.peek();
+                if (sendResponse(clientResponse)) {
+                    responseQueue.poll();
+                } else if (clientResponse.attemptCount() >= MAX_RESPONSE_ATTEMPTS) {
+                    log.warn("Max attempts reached for {}", clientResponse.address());
+                    responseQueue.poll();
+                } else {
+                    responseQueue.poll();
+                    responseQueue.add(clientResponse.withAttemptIncrement());
+                    log.warn("Attempt {}: Server responding timeout", clientResponse.attemptCount());
                 }
-            });
+            }
+            if (responseQueue.isEmpty()) {
+                key.interestOps(SelectionKey.OP_READ);
+            }
         }
     }
 
@@ -225,6 +217,9 @@ public final class Server implements Runnable, AutoCloseable {
             log.info("Initiating graceful shutdown...");
             isRunning.set(false);
             selector.wakeup();
+            requestReaderPool.shutdown();
+            requestProcessorPool.shutdown();
+            responseSenderPool.shutdown();
         }
     }
 
@@ -234,10 +229,6 @@ public final class Server implements Runnable, AutoCloseable {
             log.info("Flushing remaining responses: {}", responseQueue.size());
             flushRemainingResponses();
             log.info("Closing resources...");
-
-            requestProcessingPool.shutdownNow();
-            responseSendingPool.shutdownNow();
-
             if (selector != null) {
                 try {
                     if (selector.isOpen()) {
@@ -249,6 +240,9 @@ public final class Server implements Runnable, AutoCloseable {
                 }
             }
             if (channel != null) channel.close();
+            requestReaderPool.shutdownNow();
+            requestProcessorPool.shutdownNow();
+            responseSenderPool.shutdownNow();
             log.info("Server stopped gracefully. Buffers in pool: {}", bufferPool.size());
         } catch (IOException e) {
             log.error("Error during shutdown: {}", e.getMessage());
