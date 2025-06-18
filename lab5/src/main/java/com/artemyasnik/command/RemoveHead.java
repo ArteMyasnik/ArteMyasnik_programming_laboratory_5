@@ -14,6 +14,6 @@ public final class RemoveHead extends Command {
         if (CollectionManager.getInstance().getCollection().isEmpty()) {
             return new Response("Collection is empty");
         }
-        return new Response(CollectionManager.getInstance().remove_head());
+        return new Response(CollectionManager.getInstance().removeHead(request.userDTO().id()));
     }
 }

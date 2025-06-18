@@ -2,6 +2,7 @@ package com.artemyasnik.chat;
 
 import com.artemyasnik.collection.CollectionManager;
 import com.artemyasnik.collection.classes.StudyGroup;
+import com.artemyasnik.db.dto.UserDTO;
 import com.artemyasnik.io.IOWorker;
 import com.artemyasnik.io.transfer.Request;
 import com.artemyasnik.io.transfer.Response;
@@ -62,7 +63,7 @@ public final class Handler implements Runnable {
             }
         }
 
-        return new Request(command, args, studyGroup);
+        return new Request(command, args, studyGroup, new UserDTO(0, "host", "password"));
     }
 
     private void print(final Response response) {

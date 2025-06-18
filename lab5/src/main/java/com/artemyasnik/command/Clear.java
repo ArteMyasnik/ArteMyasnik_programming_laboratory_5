@@ -14,6 +14,6 @@ public final class Clear extends Command {
         if (CollectionManager.getInstance().getCollection().isEmpty()) {
             return new Response("Collection is empty");
         }
-        return new Response(CollectionManager.getInstance().clear());
+        return new Response(CollectionManager.getInstance().clear(request.userDTO().id()));
     }
 }

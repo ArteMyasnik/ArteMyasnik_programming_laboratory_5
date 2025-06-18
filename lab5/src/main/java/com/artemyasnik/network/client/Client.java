@@ -2,6 +2,8 @@ package com.artemyasnik.network.client;
 
 import com.artemyasnik.chat.Router;
 import com.artemyasnik.collection.classes.StudyGroup;
+import com.artemyasnik.db.dao.UserDAO;
+import com.artemyasnik.db.dto.UserDTO;
 import com.artemyasnik.io.IOWorker;
 import com.artemyasnik.io.transfer.Request;
 import com.artemyasnik.io.transfer.Response;
@@ -12,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.*;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -27,15 +30,14 @@ public final class Client implements Runnable {
     private InetSocketAddress serverAddress;
     private static final int RESPONSE_TIMEOUT = 5000;
     private static final int MAX_REQUEST_ATTEMPTS = 3;
-
-    // Thread pools
     private final ExecutorService requestReadingPool = Executors.newCachedThreadPool();
     private final ForkJoinPool requestProcessingPool = new ForkJoinPool();
     private final ForkJoinPool responseSendingPool = new ForkJoinPool();
-
-    // Synchronized collections
     private final Queue<Request> requestQueue = new ConcurrentLinkedQueue<>();
     private final Queue<Response> responseQueue = new ConcurrentLinkedQueue<>();
+
+    private final UserDAO userDAO = new UserDAO();
+    private UserDTO currentUser;
 
     public Client(ClientConfiguration config, ConsoleWorker console, IOWorker<String> script) {
         this.config = config;
@@ -51,7 +53,12 @@ public final class Client implements Runnable {
             serverAddress = new InetSocketAddress(config.host(), config.port());
 
             log.info("Client started with configuration: {}", config);
-            console.writeln("Welcome to lab6 by ArteMyasnik!");
+            console.writeln("Welcome to lab7 by ArteMyasnik!");
+
+            if (!authenticateUser()) {
+                console.writeln("Authentication failed. Exiting...");
+                return;
+            }
 
             startRequestProcessingThread();
             startResponseHandlingThread();
@@ -70,6 +77,70 @@ public final class Client implements Runnable {
             log.error("Client error: {}", e.getMessage());
         } finally {
             closeResources();
+        }
+    }
+
+    private boolean authenticateUser() throws IOException {
+        while (true) {
+            console.writeln("Choose action:");
+            console.writeln("1. Login");
+            console.writeln("2. Register");
+            console.writeln("3. Exit");
+
+            String choice = console.read("> ").trim();
+
+            try {
+                switch (choice) {
+                    case "1":
+                        return login();
+                    case "2":
+                        return register();
+                    case "3":
+                        return false;
+                    default:
+                        console.writeln("Invalid choice. Please try again.");
+                }
+            } catch (SQLException e) {
+                console.writeln("Database error: " + e.getMessage());
+                return false;
+            }
+        }
+    }
+
+    private boolean login() throws SQLException, IOException {
+        console.writeln("=== Login ===");
+        String username = console.read("Username: ").trim();
+        String password = console.read("Password: ").trim();
+
+        Optional<UserDTO> user = userDAO.authenticate(username, password);
+        if (user.isPresent()) {
+            currentUser = user.get();
+            console.writeln("Login successful! Welcome, " + username);
+            return true;
+        } else {
+            console.writeln("Invalid username or password");
+            return false;
+        }
+    }
+
+    private boolean register() throws SQLException, IOException {
+        console.writeln("=== Registration ===");
+        String username = console.read("Choose username: ").trim();
+        String password = console.read("Choose password: ").trim();
+        String confirmPassword = console.read("Confirm password: ").trim();
+
+        if (!password.equals(confirmPassword)) {
+            console.writeln("Passwords do not match");
+            return false;
+        }
+
+        try {
+            currentUser = userDAO.registerUser(username, password);
+            console.writeln("Registration successful! Welcome, " + username);
+            return true;
+        } catch (IllegalArgumentException e) {
+            console.writeln("Error: " + e.getMessage());
+            return false;
         }
     }
 
@@ -142,7 +213,7 @@ public final class Client implements Runnable {
             }
         }
 
-        return new Request(command, args, studyGroup);
+        return new Request(command, args, studyGroup, currentUser);
     }
 
     private Response sendRequestWithRetry(Request request) throws IOException {

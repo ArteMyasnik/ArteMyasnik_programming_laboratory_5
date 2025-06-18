@@ -3,162 +3,246 @@ package com.artemyasnik.collection;
 import com.artemyasnik.collection.classes.StudyGroup;
 import com.artemyasnik.collection.id.IdGenerator;
 import com.artemyasnik.collection.passport.PassportValidator;
-import com.artemyasnik.io.file.MyInputStreamReader;
-import com.artemyasnik.io.file.MyFileWriter;
-import com.artemyasnik.io.configuration.FileConfiguration;
-import com.artemyasnik.io.parser.XmlReader;
-import com.artemyasnik.io.parser.XmlWriter;
-import com.artemyasnik.io.transfer.Response;
-import lombok.Getter;
+import com.artemyasnik.db.dao.StudyGroupDAO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.nio.file.Files;
+import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
-@Getter
 public final class CollectionManager {
     private static CollectionManager INSTANCE;
-    private final static Logger log = LoggerFactory.getLogger(CollectionManager.class);
-    private final List<StudyGroup> collection = new LinkedList<>();
-    private final java.time.LocalDateTime initializationDate;
+    private static final Logger log = LoggerFactory.getLogger(CollectionManager.class);
+    private static final ReentrantLock lock = new ReentrantLock();
+
+    private final List<StudyGroup> collection;
+    private final LocalDateTime initializationDate;
+    private final StudyGroupDAO studyGroupDAO;
+    private final PassportValidator passportValidator;
 
     private CollectionManager() {
-        this.initializationDate = java.time.LocalDateTime.now();
-        load();
+        this.collection = new LinkedList<>();
+        this.initializationDate = LocalDateTime.now();
+        this.studyGroupDAO = StudyGroupDAO.getInstance();
+        this.passportValidator = PassportValidator.getInstance();
+        loadFromDatabase();
     }
 
     public static CollectionManager getInstance() {
-        return INSTANCE == null ? INSTANCE = new CollectionManager() : INSTANCE;
+        lock.lock();
+        try {
+            if (INSTANCE == null) {
+                INSTANCE = new CollectionManager();
+            }
+            return INSTANCE;
+        } finally {
+            lock.unlock();
+        }
     }
 
-    private void load() {
+    private void loadFromDatabase() {
+        lock.lock();
         try {
             collection.clear();
-            MyInputStreamReader myInputStreamReader = new MyInputStreamReader(FileConfiguration.DATA_FILE_PATH);
-            XmlReader xmlReader = new XmlReader();
-            List<StudyGroup> loadedGroups = xmlReader.parseXml(myInputStreamReader.readFile());
+            List<StudyGroup> loadedGroups = studyGroupDAO.findAllWithPerson();
 
+            // Инициализация генератора ID
             int maxId = loadedGroups.stream()
                     .mapToInt(StudyGroup::getId)
                     .max()
-                    .orElse(1);
-            if (loadedGroups.stream().anyMatch(g -> g.getId() == null || g.getId() < 1)) {
-                throw new IllegalArgumentException("Collection contains invalid IDs");
-            }
-
-            IdGenerator idGenerator = IdGenerator.getInstance();
-            idGenerator.initializeWith(maxId);
-
-            if (Files.size(FileConfiguration.ID_SEQ_FILE_PATH) == 0) {
-                idGenerator.saveLastId(maxId);
-                log.debug("Initialized ID sequence file with max ID: {}", maxId);
-            }
+                    .orElse(0);
+            IdGenerator.getInstance().initializeWith(maxId + 1);
 
             collection.addAll(loadedGroups);
-            log.info("Collection loaded successfully. Max ID: {}", maxId);
-//            return "Collection was loaded successfully";
-        } catch (IOException | IllegalArgumentException e) {
+
+            // Регистрация всех passportID
+            loadedGroups.stream()
+                    .filter(g -> g.getGroupAdmin() != null)
+                    .forEach(g -> passportValidator.validate(g.getGroupAdmin().getPassportID()));
+
+            log.info("Loaded {} study groups from database", loadedGroups.size());
+        } catch (SQLException e) {
+            log.error("Failed to load collection from database", e);
             collection.clear();
-            log.error("Collection load failed: {}", e.getMessage());
-            try {
-                IdGenerator.getInstance().initializeWith(1);
-                log.debug("Initialized ID generator with default value 1");
-            } catch (Exception ex) {
-                log.error("Failed to initialize ID generator: {}", ex.getMessage());
-                //            return "Collection load failed";
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public String add(StudyGroup studyGroup, int ownerId) {
+        lock.lock();
+        try {
+            // Сначала сохраняем в БД
+            int newId = studyGroupDAO.saveAndReturnId(studyGroup, ownerId);
+            studyGroup.setId(newId);
+
+            // Затем добавляем в коллекцию
+            collection.add(studyGroup);
+
+            // Регистрируем passportID если есть администратор
+            if (studyGroup.getGroupAdmin() != null) {
+                passportValidator.validate(studyGroup.getGroupAdmin().getPassportID());
             }
+
+            return "StudyGroup added successfully with ID: " + newId;
+        } catch (SQLException e) {
+            log.error("Failed to add StudyGroup", e);
+            return "Failed to add StudyGroup: " + e.getMessage();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public String update(int id, StudyGroup updatedStudyGroup, int ownerId) {
+        lock.lock();
+        try {
+            Optional<StudyGroup> existing = collection.stream()
+                    .filter(g -> g.getId() == id)
+                    .findFirst();
+            if (existing.isEmpty()) { return "StudyGroup with ID " + id + " not found"; }
+            studyGroupDAO.updateInDatabase(updatedStudyGroup, ownerId);
+
+            StudyGroup oldGroup = existing.get();
+            if (oldGroup.getGroupAdmin() != null) {
+                passportValidator.remove(oldGroup.getGroupAdmin().getPassportID());
+            }
+
+            collection.remove(oldGroup);
+            updatedStudyGroup.setId(id);
+            collection.add(updatedStudyGroup);
+
+            if (updatedStudyGroup.getGroupAdmin() != null) {
+                passportValidator.validate(updatedStudyGroup.getGroupAdmin().getPassportID());
+            }
+
+            return "StudyGroup with ID " + id + " updated successfully";
+        } catch (SQLException e) {
+            log.error("Failed to update StudyGroup", e);
+            return "Failed to update StudyGroup: " + e.getMessage();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public String removeById(int id, int ownerId) {
+        lock.lock();
+        try {
+            Optional<StudyGroup> groupToRemove = collection.stream()
+                    .filter(g -> g.getId() == id)
+                    .findFirst();
+
+            if (!groupToRemove.isPresent()) {
+                return "Error: StudyGroup with ID " + id + " not found";
+            }
+            StudyGroup removedGroup = groupToRemove.get();
+            if (!studyGroupDAO.isOwner(id, ownerId)) {
+                return "Error: You don't have permission to remove this study group";
+            }
+            studyGroupDAO.removeFromDatabase(id, ownerId);
+            if (removedGroup.getGroupAdmin() != null) {
+                passportValidator.remove(removedGroup.getGroupAdmin().getPassportID());
+            }
+            collection.remove(removedGroup);
+            return "Element with id " + id + " was successfully removed";
+        } catch (SQLException e) {
+            log.error("Failed to remove StudyGroup", e);
+            return "Error: Failed to remove StudyGroup - " + e.getMessage();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public String clear(int ownerId) {
+        lock.lock();
+        try {
+            // Получаем только группы владельца
+            List<StudyGroup> ownerGroups = collection.stream()
+                    .filter(g -> {
+                        try {
+                            return studyGroupDAO.isOwner(g.getId(), ownerId);
+                        } catch (SQLException e) {
+                            log.error("Error checking ownership", e);
+                            return false;
+                        }
+                    })
+                    .collect(Collectors.toList());
+
+            // Удаляем из БД
+            for (StudyGroup group : ownerGroups) {
+                studyGroupDAO.removeFromDatabase(group.getId(), ownerId);
+                if (group.getGroupAdmin() != null) {
+                    passportValidator.remove(group.getGroupAdmin().getPassportID());
+                }
+            }
+
+            // Удаляем из коллекции
+            collection.removeAll(ownerGroups);
+
+            return "Removed " + ownerGroups.size() + " study groups";
+        } catch (SQLException e) {
+            log.error("Failed to clear collection", e);
+            return "Failed to clear collection: " + e.getMessage();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public String removeHead(int ownerId) {
+        lock.lock();
+        try {
+            if (collection.isEmpty()) {
+                return "Collection is empty";
+            }
+
+            StudyGroup head = collection.get(0);
+            return this.removeById(head.getId(), ownerId);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public String show() {
+        lock.lock();
+        try {
+            if (collection.isEmpty()) {
+                return "Collection is empty";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            collection.stream()
+                    .sorted()
+                    .forEach(group -> sb.append(group).append("\n"));
+
+            return sb.toString();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public String info() {
+        lock.lock();
+        try {
+            return "Type: " + collection.getClass().getSimpleName() + "\n" +
+                    "Initialization date: " + initializationDate + "\n" +
+                    "Number of elements: " + collection.size();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public List<StudyGroup> getCollection() {
+        lock.lock();
+        try {
+            return new ArrayList<>(collection);
+        } finally {
+            lock.unlock();
         }
     }
 
     public String save() {
-        try {
-            XmlWriter xmlWriter = new XmlWriter();
-            String xmlContent = xmlWriter.serializeToXml(collection);
-            MyFileWriter myFileWriter = new MyFileWriter(FileConfiguration.DATA_FILE_PATH);
-            myFileWriter.writeFile(xmlContent);
-            return "Collection was saved successfully";
-        } catch (IOException e) {
-            System.err.println(e.getMessage());
-            return "Collection save failed";
-        }
-    }
-
-    public String clear() {
-        collection.clear();
-        PassportValidator.getInstance().clear();
-        return "Collection was cleared successfully";
-    }
-
-    public String show() {
-        StringBuilder sb = new StringBuilder();
-        collection.stream()
-                .sorted(StudyGroup::compareTo)
-                .forEach(group -> sb.append(group.toString()).append(System.lineSeparator()));
-        return "Collection: " + sb;
-    }
-
-    public String info() {
-        return "Collection type: " + collection.getClass().getSimpleName() + "\n" +
-                "Initialization date: " + initializationDate + "\n" +
-                "Number of elements: " + collection.size();
-    }
-
-    public String update(Integer id, StudyGroup updatedStudyGroup) {
-        if (updatedStudyGroup == null) {
-            throw new IllegalArgumentException("Updated group can't be null");
-        }
-        if (id == null) {
-            throw new IllegalArgumentException("Id can't be null");
-        }
-        Iterator<StudyGroup> iterator = collection.iterator();
-        while (iterator.hasNext()) {
-            StudyGroup group = iterator.next();
-            if (group.getId().equals(id)) {
-                if (!group.getGroupAdmin().getPassportID().equals(updatedStudyGroup.getGroupAdmin().getPassportID())) {
-                    updatedStudyGroup.setId(id);
-                    PassportValidator.getInstance().remove(group.getGroupAdmin().getPassportID());
-                    iterator.remove();
-                    PassportValidator.getInstance().validate(updatedStudyGroup.getGroupAdmin().getPassportID());
-                    collection.add(updatedStudyGroup);
-                } else {
-                    updatedStudyGroup.setId(id);
-                    iterator.remove();
-                    collection.add(updatedStudyGroup);
-                }
-                return "Collection was updated";
-            }
-        }
-        return "Collection update failed";
-    }
-
-    public String remove(Integer id) {
-        if (id == null) {
-            throw new IllegalArgumentException("Collection remove failed. Id can't be null");
-        }
-        if (collection.isEmpty()) {
-            return "Collection remove failed. Collection is empty, nothing to remove";
-        }
-
-        Iterator<StudyGroup> iterator = collection.iterator();
-        while (iterator.hasNext()) {
-            StudyGroup group = iterator.next();
-            if (id.equals(group.getId())) {
-                PassportValidator.getInstance().remove(group.getGroupAdmin().getPassportID());
-                iterator.remove();
-                return "Element with id " + id + " was successfully removed";
-            }
-        }
-        return "Collection remove failed. Element with id " + id + " not found in collection";
-    }
-
-    public String remove_head() {
-        try {
-            this.remove(0);
-            return "Element head was successfuly removed";
-        } catch (Exception e) {
-            return "Collection remove_head failed";
-        }
+        return "Data is automatically persisted to database";
     }
 }

@@ -1,10 +1,8 @@
 package com.artemyasnik.db.dao;
 
-
 import com.artemyasnik.collection.classes.Coordinates;
 import com.artemyasnik.collection.classes.StudyGroup;
 import com.artemyasnik.db.ConnectionFactory;
-import com.artemyasnik.db.query.PersonQuery;
 import com.artemyasnik.db.query.StudyGroupQuery;
 
 import java.sql.*;
@@ -13,26 +11,34 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class StudyGroupDAO {
-    public List<StudyGroup> findAllWithPersonByOwnerId(int id) throws SQLException {
-        List<StudyGroup> groups = new LinkedList<>();
-        try (Connection connection = ConnectionFactory.getInstance().getConnection();
-             PreparedStatement preparedStatement = connection.prepareStatement(StudyGroupQuery.FIND_ALL_WITH_PERSON_BY_OWNER_ID.getQuery())) {
-            preparedStatement.setInt(1, id);
-            preparedStatement.executeQuery();
-            try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                while (resultSet.next()) {
-                    groups.add(mapResultSetToStudyGroup(resultSet));
-                }
-            }
+    private static StudyGroupDAO INSTANCE;
+
+    private StudyGroupDAO() {}
+
+    public static StudyGroupDAO getInstance() {
+        if (INSTANCE == null) {
+            INSTANCE = new StudyGroupDAO();
         }
-        return groups;
+        return INSTANCE;
     }
 
     public List<StudyGroup> findAllWithPerson() throws SQLException {
         List<StudyGroup> groups = new LinkedList<>();
         try (Connection connection = ConnectionFactory.getInstance().getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement(StudyGroupQuery.FIND_ALL_WITH_PERSON.getQuery())) {
-            preparedStatement.executeQuery();
+             PreparedStatement preparedStatement = connection.prepareStatement(StudyGroupQuery.FIND_ALL_WITH_PERSON.getQuery());
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+            while (resultSet.next()) {
+                groups.add(mapResultSetToStudyGroup(resultSet));
+            }
+        }
+        return groups;
+    }
+
+    public List<StudyGroup> findAllWithPersonByOwnerId(int ownerId) throws SQLException {
+        List<StudyGroup> groups = new LinkedList<>();
+        try (Connection connection = ConnectionFactory.getInstance().getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(StudyGroupQuery.FIND_ALL_WITH_PERSON_BY_OWNER_ID.getQuery())) {
+            preparedStatement.setInt(1, ownerId);
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
                 while (resultSet.next()) {
                     groups.add(mapResultSetToStudyGroup(resultSet));
@@ -42,74 +48,104 @@ public class StudyGroupDAO {
         return groups;
     }
 
-    public void save(StudyGroup studyGroup, int owner_id) throws SQLException {
-        try (Connection connection = ConnectionFactory.getInstance().getConnection()){
+    public int saveAndReturnId(StudyGroup studyGroup, int ownerId) throws SQLException {
+        try (Connection connection = ConnectionFactory.getInstance().getConnection()) {
             connection.setAutoCommit(false);
-            try (PreparedStatement preparedStatement = connection.prepareStatement(StudyGroupQuery.SAVE.getQuery())) {
+            try (PreparedStatement preparedStatement = connection.prepareStatement(
+                    StudyGroupQuery.SAVE.getQuery(), Statement.RETURN_GENERATED_KEYS)) {
+                mapStudyGroupToPreparedStatement(studyGroup, ownerId, preparedStatement);
                 if (studyGroup.getGroupAdmin() == null) {
                     preparedStatement.setNull(9, Types.INTEGER);
                 } else {
-                    Integer group_admin_id = PersonDAO.save(connection, studyGroup.getGroupAdmin());
-                    preparedStatement.setInt(9, group_admin_id);
+                    int adminId = PersonDAO.getInstance().saveAndReturnId(connection, studyGroup.getGroupAdmin());
+                    preparedStatement.setInt(9, adminId);
                 }
-                mapStudyGroupToPreparedStatement(studyGroup, owner_id, preparedStatement);
                 preparedStatement.executeUpdate();
-                connection.commit();
+                try (ResultSet generatedKeys = preparedStatement.getGeneratedKeys()) {
+                    if (generatedKeys.next()) {
+                        int generatedId = generatedKeys.getInt(1);
+                        connection.commit();
+                        return generatedId;
+                    } else {
+                        connection.rollback();
+                        throw new SQLException("Creating study group failed, no ID obtained");
+                    }
+                }
             } catch (SQLException e) {
                 connection.rollback();
-                throw new SQLException("Failed to save study group", e);
+                throw e;
             }
         }
     }
 
-    public void updateById(StudyGroup studyGroup, int owner_id, int study_group_id) throws SQLException {
+    public void updateInDatabase(StudyGroup studyGroup, int ownerId) throws SQLException {
         try (Connection connection = ConnectionFactory.getInstance().getConnection()) {
             connection.setAutoCommit(false);
             try {
-                if (!isOwner(connection, study_group_id, owner_id)) {
-                    throw new IllegalArgumentException("User is not the owner of this study group");
-                }
-                Integer currentAdminId = getCurrentStudyGroupGroupAdminId(connection, study_group_id);
+                if (!isOwner(connection, studyGroup.getId(), ownerId)) { throw new IllegalArgumentException("User is not the owner of this study group"); }
+                Integer currentAdminId = getCurrentStudyGroupGroupAdminId(connection, studyGroup.getId());
                 Integer newAdminId = null;
+
                 if (studyGroup.getGroupAdmin() != null) {
                     if (currentAdminId != null) {
-                        PersonDAO.update(connection, studyGroup.getGroupAdmin(), currentAdminId);
+                        PersonDAO.getInstance().update(connection, studyGroup.getGroupAdmin(), currentAdminId);
                         newAdminId = currentAdminId;
-                    } else { newAdminId = PersonDAO.save(connection, studyGroup.getGroupAdmin()); }
-                } else {
-                    if (currentAdminId != null) { PersonDAO.removeById(connection, currentAdminId); }
-                    newAdminId = null;
-                }
+                    } else { newAdminId = PersonDAO.getInstance().saveAndReturnId(connection, studyGroup.getGroupAdmin()); }
+                } else if (currentAdminId != null) { PersonDAO.getInstance().removeById(connection, currentAdminId); }
+
                 try (PreparedStatement preparedStatement = connection.prepareStatement(StudyGroupQuery.UPDATE_BY_ID.getQuery())) {
-                    mapStudyGroupToPreparedStatement(studyGroup, owner_id, preparedStatement);
+                    mapStudyGroupToPreparedStatement(studyGroup, ownerId, preparedStatement);
                     preparedStatement.setObject(9, newAdminId, Types.INTEGER);
-                    preparedStatement.setInt(10, study_group_id);
+                    preparedStatement.setInt(10, studyGroup.getId());
+
+                    int affectedRows = preparedStatement.executeUpdate();
+                    if (affectedRows == 0) {
+                        throw new SQLException("Updating study group failed, no rows affected");
+                    }
+                    connection.commit();
                 }
-                connection.commit();
             } catch (SQLException e) {
                 connection.rollback();
-                throw new SQLException("Failed to update study group", e);
+                throw e;
             }
         }
     }
 
-    public void removeById(int owner_id, int study_group_id) throws SQLException {
+    public void removeFromDatabase(int studyGroupId, int ownerId) throws SQLException {
         try (Connection connection = ConnectionFactory.getInstance().getConnection()) {
             connection.setAutoCommit(false);
             try {
-                if (!isOwner(connection, study_group_id, owner_id)) {
+                if (!isOwner(connection, studyGroupId, ownerId)) {
                     throw new IllegalArgumentException("User is not the owner of this study group");
                 }
-                Integer adminId = getCurrentStudyGroupGroupAdminId(connection, study_group_id);
-                try (PreparedStatement preparedStatement = connection.prepareStatement(PersonQuery.REMOVE_BY_ID.getQuery())) {
-                    preparedStatement.setInt(1, study_group_id);
-                    preparedStatement.executeUpdate();
+
+                Integer adminId = getCurrentStudyGroupGroupAdminId(connection, studyGroupId);
+                if (adminId != null) {
+                    PersonDAO.getInstance().removeById(connection, adminId);
                 }
-                if (adminId != null) { PersonDAO.removeById(connection, adminId); }
-                connection.commit();
+
+                try (PreparedStatement preparedStatement = connection.prepareStatement(
+                        StudyGroupQuery.REMOVE_BY_ID.getQuery())) {
+                    preparedStatement.setInt(1, studyGroupId);
+                    int affectedRows = preparedStatement.executeUpdate();
+                    if (affectedRows == 0) {
+                        throw new SQLException("Deleting study group failed, no rows affected");
+                    }
+                    connection.commit();
+                }
             } catch (SQLException e) {
                 connection.rollback();
-                throw new SQLException("Failed to remove study group", e);
+                throw e;
+            }
+        }
+    }
+
+    public boolean isOwner(int studyGroupId, int ownerId) throws SQLException {
+        try (Connection connection = ConnectionFactory.getInstance().getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(StudyGroupQuery.FIND_OWNER_BY_ID.getQuery())) {
+            preparedStatement.setInt(1, studyGroupId);
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                return resultSet.next() && resultSet.getInt("owner_id") == ownerId;
             }
         }
     }
@@ -126,8 +162,8 @@ public class StudyGroupDAO {
     private Integer getCurrentStudyGroupGroupAdminId(Connection connection, int study_group_id) throws SQLException {
         try (PreparedStatement preparedStatement = connection.prepareStatement(StudyGroupQuery.FIND_GROUP_ADMIN_BY_ID.getQuery())) {
             preparedStatement.setInt(1, study_group_id);
-            try (ResultSet rs = preparedStatement.executeQuery()) {
-                return rs.next() ? rs.getObject("group_admin_id", Integer.class) : null;
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                return resultSet.next() ? resultSet.getObject("group_admin_id", Integer.class) : null;
             }
         }
     }
@@ -153,7 +189,7 @@ public class StudyGroupDAO {
                 com.artemyasnik.collection.classes.Semester.valueOf(resultSet.getString("semester_enum")),
                 com.artemyasnik.collection.classes.FormOfEducation.valueOf(resultSet.getString("form_of_education") != null ? resultSet.getString("form_of_education") : null),
                 resultSet.getTimestamp("creation_date") != null ? resultSet.getTimestamp("creation_date").toInstant().atZone(ZoneId.systemDefault()) : null,
-                PersonDAO.mapResultSetToPerson(resultSet)
+                PersonDAO.getInstance().mapResultSetToPerson(resultSet)
         );
     }
 }

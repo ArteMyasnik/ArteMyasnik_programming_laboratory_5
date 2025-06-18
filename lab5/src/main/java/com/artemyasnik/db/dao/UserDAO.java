@@ -11,14 +11,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 public class UserDAO {
-//    public Optional<UserDTO> findById(int id) throws SQLException {
-//        try (Connection connection = ConnectionFactory.getInstance().getConnection();
-//             PreparedStatement preparedStatement = connection.prepareStatement(UserQuery.FIND_BY_ID.getQuery())) {
-//
-//            preparedStatement.setInt(1, id);
-//            return executeQueryForSingleResult(preparedStatement);
-//        }
-//    }
 //
 //    public List<UserDTO> findAll() throws SQLException {
 //        try (Connection connection = ConnectionFactory.getInstance().getConnection();
@@ -27,6 +19,15 @@ public class UserDAO {
 //            return mapResultSetToList(resultSet);
 //        }
 //    }
+
+    public Optional<UserDTO> findById(int id) throws SQLException {
+        try (Connection connection = ConnectionFactory.getInstance().getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(UserQuery.FIND_BY_ID.getQuery())) {
+
+            preparedStatement.setInt(1, id);
+            return executeQueryForSingleResult(preparedStatement);
+        }
+    }
 
     public Optional<UserDTO> findByUsername(String username) throws SQLException {
         try (Connection connection = ConnectionFactory.getInstance().getConnection();
@@ -46,9 +47,7 @@ public class UserDAO {
             int affectedRows = preparedStatement.executeUpdate();
             if (affectedRows == 0) { throw new SQLException("Creating user failed, no rows affected."); }
             try (ResultSet resultSet = preparedStatement.getGeneratedKeys()) {
-                if (resultSet.next()) {
-                    return new UserDTO(resultSet.getInt(1), user.username(), user.passwordHash());
-                }
+                if (resultSet.next()) { return new UserDTO(resultSet.getInt(1), user.username(), user.passwordHash()); }
                 throw new SQLException("Creating user failed, no ID obtained.");
             }
         }

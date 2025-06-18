@@ -17,6 +17,6 @@ public final class RemoveById extends Command {
         if (CollectionManager.getInstance().getCollection().isEmpty()) {
             return new Response("Collection is empty");
         }
-        return new Response(CollectionManager.getInstance().remove(Integer.valueOf(request.args().get(0))));
+        return new Response(CollectionManager.getInstance().removeById(Integer.valueOf(request.args().get(0)), request.userDTO().id()));
     }
 }
