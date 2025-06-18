@@ -18,11 +18,16 @@ public final class ConnectionFactory {
     private static volatile ConnectionFactory instance;
     private static final Lock instanceLock = new ReentrantLock();
 
-    private final Properties config;
+    private final String dbUrl;
+    private final String dbUser;
+    private final String dbPassword;
     private Connection connection;
 
     private ConnectionFactory() {
-        this.config = loadConfig();
+        Properties config = loadConfig();
+        this.dbUrl = config.getProperty("db.url");
+        this.dbUser = config.getProperty("db.user");
+        this.dbPassword = config.getProperty("db.password");
         initializeConnection();
     }
 
@@ -36,9 +41,8 @@ public final class ConnectionFactory {
                 throw new IllegalStateException("db.properties not found in classpath!");
             }
             props.load(input);
-
             String user = props.getProperty("db.user");
-            if ("${system:USER}".equals(user)) {
+            if (user != null && user.contains("${")) {
                 props.setProperty("db.user", System.getProperty("user.name"));
             }
 
@@ -53,16 +57,14 @@ public final class ConnectionFactory {
     private void initializeConnection() {
         try {
             Class.forName("org.postgresql.Driver");
-            this.connection = DriverManager.getConnection(
-                    config.getProperty("db.url"),
-                    config.getProperty("db.user"),
-                    config.getProperty("db.password", "")
-            );
-            log.info("Database connection established");
+            this.connection = DriverManager.getConnection(dbUrl, dbUser, dbPassword);
+            log.info("Database connection established for user: {}", dbUser);
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException("PostgreSQL JDBC driver not found", e);
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to establish database connection", e);
+            throw new RuntimeException(String.format(
+                    "Failed to establish database connection to %s as user %s",
+                    dbUrl, dbUser), e);
         }
     }
 
