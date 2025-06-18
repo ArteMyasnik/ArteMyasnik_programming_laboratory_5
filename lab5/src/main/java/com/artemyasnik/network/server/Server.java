@@ -14,9 +14,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class Server implements Runnable, AutoCloseable {
@@ -27,6 +28,10 @@ public final class Server implements Runnable, AutoCloseable {
     private Selector selector;
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
     private final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
+    private final ExecutorService requestReadingPool = Executors.newCachedThreadPool();
+    private final ForkJoinPool requestProcessingPool = new ForkJoinPool();
+    private final ForkJoinPool responseSendingPool = new ForkJoinPool();
+    private final Queue<RequestTask> requestQueue = new ConcurrentLinkedQueue<>();
     private final Queue<ByteBuffer> bufferPool = new ConcurrentLinkedQueue<>();
     private final Queue<ClientResponse> responseQueue = new ConcurrentLinkedQueue<>();
     private final static int MAX_BUFFER_POOL_SIZE = 50;
@@ -50,10 +55,58 @@ public final class Server implements Runnable, AutoCloseable {
             selector = Selector.open();
             channel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 
+            startRequestProcessingThread();
+            startResponseHandlingThread();
+
             log.info("Server started with configuration: {}", config);
         } catch (IOException e) {
             log.error("Server initiation error: {}", e.getMessage());
         }
+    }
+
+    private void startRequestProcessingThread() {
+        new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted() && !isShuttingDown.get()) {
+                if (!requestQueue.isEmpty()) {
+                    RequestTask task = requestQueue.poll();
+                    if (task != null) {
+                        requestProcessingPool.submit(() -> {
+                            Response response = processRequest(task.request());
+                            responseQueue.add(new ClientResponse(response, task.clientAddress()));
+                            selector.wakeup();
+                        });
+                    }
+                }
+            }
+        }).start();
+    }
+
+    private void startResponseHandlingThread() {
+        new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted() && !isShuttingDown.get()) {
+                if (!responseQueue.isEmpty()) {
+                    ClientResponse clientResponse = responseQueue.peek();
+                    if (clientResponse != null) {
+                        responseSendingPool.submit(() -> {
+                            try {
+                                if (sendResponse(clientResponse)) {
+                                    responseQueue.poll();
+                                } else if (clientResponse.attemptCount() >= MAX_RESPONSE_ATTEMPTS) {
+                                    log.warn("Max attempts reached for {}", clientResponse.address());
+                                    responseQueue.poll();
+                                } else {
+                                    responseQueue.poll();
+                                    responseQueue.add(clientResponse.withAttemptIncrement());
+                                    log.warn("Attempt {}: Server responding timeout", clientResponse.attemptCount());
+                                }
+                            } catch (IOException e) {
+                                log.error("Error sending response: {}", e.getMessage());
+                            }
+                        });
+                    }
+                }
+            }
+        }).start();
     }
 
     private ByteBuffer getBuffer() {
@@ -69,6 +122,10 @@ public final class Server implements Runnable, AutoCloseable {
         }
     }
 
+    public boolean isRunning() {
+        return isRunning.get();
+    }
+
     @Override
     public void run() {
         try {
@@ -79,9 +136,9 @@ public final class Server implements Runnable, AutoCloseable {
             }
         } catch (IOException e) {
             if (!isShuttingDown.get()) {
-                log.error("Server shutting down error: {}", e.getMessage());
-            } else{
                 log.error("Server running error: {}", e.getMessage());
+            } else {
+                log.error("Server shutting down error: {}", e.getMessage());
             }
         } finally {
             close();
@@ -97,8 +154,16 @@ public final class Server implements Runnable, AutoCloseable {
                 log.warn("Invalid key encountered: {}", key);
                 continue;
             }
-            if (key.isReadable()) handleRequest(key);
-            if (key.isWritable()) handleResponse(key);
+
+            if (key.isReadable()) {
+                requestReadingPool.submit(() -> {
+                    try {
+                        handleRequest(key);
+                    } catch (IOException e) {
+                        log.error("Error handling request: {}", e.getMessage());
+                    }
+                });
+            }
         }
     }
 
@@ -113,15 +178,11 @@ public final class Server implements Runnable, AutoCloseable {
                 Request request = SerializationUtils.deserialize(buffer.array());
                 log.info("Received request from {}: {} - {}", clientAddress, request.command(), request);
 
-                Response response = processRequest(request);
-                log.info("Response: {}", response);
-
-                if (responseQueue.size() >= MAX_RESPONSE_QUEUE_SIZE) {
+                if (requestQueue.size() >= MAX_RESPONSE_QUEUE_SIZE) {
                     sendResponseImmediately(new Response("Server is busy, please try again later"), clientAddress);
-                    log.warn("Max response queue size reached");
+                    log.warn("Max request queue size reached");
                 } else {
-                    responseQueue.add(new ClientResponse(response, clientAddress));
-                    key.interestOps(SelectionKey.OP_WRITE); // SelectionKey.OP_READ |
+                    requestQueue.add(new RequestTask(request, clientAddress));
                 }
             }
         } finally {
@@ -131,26 +192,6 @@ public final class Server implements Runnable, AutoCloseable {
 
     private Response processRequest(Request request) {
         return Router.getInstance().route(request);
-    }
-
-    private void handleResponse(SelectionKey key) throws IOException {
-        if (!responseQueue.isEmpty()) {
-            ClientResponse clientResponse = responseQueue.peek();
-            if (sendResponse(clientResponse)) {
-                responseQueue.poll();
-            } else if (clientResponse.attemptCount() >= MAX_RESPONSE_ATTEMPTS) {
-                log.warn("Max attempts reached for {}", clientResponse.address());
-                responseQueue.poll();
-            } else {
-                responseQueue.poll();
-                responseQueue.add(clientResponse.withAttemptIncrement());
-                log.warn("Attempt {}: Server responding timeout", clientResponse.attemptCount());
-            }
-        }
-        if (responseQueue.isEmpty()) {
-            key.interestOps(SelectionKey.OP_READ);
-        }
-
     }
 
     private boolean sendResponse(ClientResponse clientResponse) throws IOException {
@@ -198,6 +239,11 @@ public final class Server implements Runnable, AutoCloseable {
             log.info("Flushing remaining responses: {}", responseQueue.size());
             flushRemainingResponses();
             log.info("Closing resources...");
+
+            requestReadingPool.shutdownNow();
+            requestProcessingPool.shutdownNow();
+            responseSendingPool.shutdownNow();
+
             if (selector != null) {
                 try {
                     if (selector.isOpen()) {
@@ -253,4 +299,6 @@ public final class Server implements Runnable, AutoCloseable {
             return new ClientResponse(response, address, attemptCount + 1);
         }
     }
+
+    private record RequestTask(Request request, InetSocketAddress clientAddress) {}
 }

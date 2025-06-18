@@ -1,6 +1,8 @@
 package com.artemyasnik.collection.classes;
 
+import com.artemyasnik.collection.classes.colors.hair.Color;
 import com.artemyasnik.collection.passport.PassportValidator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 import lombok.Getter;
@@ -12,6 +14,9 @@ import java.util.Objects;
 @Getter
 @JacksonXmlRootElement(localName = "Person")
 public class Person implements Serializable {
+//    @Setter
+//    @JsonIgnore
+//    private Integer id; // Поле id необходимое для связи объектов в базе данных
     @JacksonXmlProperty(localName = "name")
     private String name; //Поле не может быть null, Строка не может быть пустой
     @JacksonXmlProperty(localName = "passportID")
@@ -24,6 +29,16 @@ public class Person implements Serializable {
     @Setter
     @JacksonXmlProperty(localName = "nationality")
     private Country nationality; //Поле может быть null
+
+    public Person() {}
+
+    public Person(String name, String passportID, Color hairColor, com.artemyasnik.collection.classes.colors.eyes.Color eyeColor, Country nationality) {
+        this.name = name;
+        this.passportID = passportID;
+        this.hairColor = hairColor;
+        this.eyeColor = eyeColor;
+        this.nationality = nationality;
+    }
 
     public void setName(String name) {
         if (name == null) throw new IllegalArgumentException("Name can't be null");

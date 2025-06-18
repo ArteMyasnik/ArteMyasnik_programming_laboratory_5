@@ -3,7 +3,6 @@ package com.artemyasnik.collection.classes;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 import lombok.Getter;
-import lombok.Setter;
 
 import java.io.Serializable;
 import java.util.Objects;
@@ -13,14 +12,24 @@ import java.util.Objects;
 public class Coordinates implements Serializable {
     @JacksonXmlProperty(localName = "x")
     private Double x; //Поле не может быть null
-    @Setter
     @JacksonXmlProperty(localName = "y")
     private long y; //Значение поля должно быть больше -365
 
+    public Coordinates() {}
+
+    public Coordinates(Double x, long y) {
+        this.x = x;
+        this.y = y;
+    }
+
     public void setX(Double x) {
         if (x == null) throw new IllegalArgumentException("X can't be null");
-        if (x < -365) throw new IllegalArgumentException("X must be greater than -365");
         this.x = x;
+    }
+
+    public void setY(long y) {
+        if (y <= -365) throw new IllegalArgumentException("Y must be greater than -365");
+        this.y = y;
     }
 
     @Override

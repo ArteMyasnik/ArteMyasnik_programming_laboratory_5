@@ -26,13 +26,6 @@ public final class XmlReader {
     public XmlReader() {
     }
 
-    /**
-     * Парсит XML-строку в список объектов StudyGroup.
-     *
-     * @param xmlString XML-строка для парсинга.
-     * @return Список объектов StudyGroup.
-     * @throws IOException Если произошла ошибка при парсинге.
-     */
     public List<StudyGroup> parseXml(String xmlString) throws IOException {
         if (xmlString == null || xmlString.trim().isEmpty()) {
             return Collections.emptyList();
@@ -41,22 +34,10 @@ public final class XmlReader {
         return wrapper.getStudyGroups();
     }
 
-    /**
-     * Парсит XML-строку в один объект StudyGroup.
-     *
-     * @param xmlString XML-строка для парсинга.
-     * @return Объект StudyGroup.
-     * @throws IOException Если произошла ошибка при парсинге.
-     */
     public StudyGroup parseSingleStudyGroup(String xmlString) throws IOException {
         return xmlMapper.readValue(xmlString, StudyGroup.class);
     }
 
-    /**
-     * Читает список StudyGroup из XML-файла с корневым элементом <StudyGroups>.
-     *
-     * @return Список объектов StudyGroup.
-     */
     public List<StudyGroup> readListFromFile() {
         try {
             StudyGroupWrapper wrapper = xmlMapper.readValue(new File(String.valueOf(this.filePath)), StudyGroupWrapper.class);
@@ -67,11 +48,6 @@ public final class XmlReader {
         }
     }
 
-    /**
-     * Читает один объект StudyGroup из XML-файла.
-     *
-     * @return Объект StudyGroup.
-     */
     public StudyGroup readFromFile() {
         try {
             return xmlMapper.readValue(new File(String.valueOf(this.filePath)), StudyGroup.class);

@@ -19,7 +19,7 @@ public class StudyGroup implements Comparable<StudyGroup>, Serializable {
     @JacksonXmlProperty(localName = "coordinates")
     private Coordinates coordinates; //Поле не может быть null
     @JacksonXmlProperty(localName = "creationDate")
-    private final ZonedDateTime creationDate = ZonedDateTime.now(); //Поле не может быть null, Значение этого поля должно генерироваться автоматически
+    private ZonedDateTime creationDate = ZonedDateTime.now(); //Поле не может быть null, Значение этого поля должно генерироваться автоматически
     @JacksonXmlProperty(localName = "studentsCount")
     private Integer studentsCount; //Значение поля должно быть больше 0, Поле может быть null
     @JacksonXmlProperty(localName = "transferredStudents")
@@ -28,10 +28,24 @@ public class StudyGroup implements Comparable<StudyGroup>, Serializable {
     private Semester semesterEnum; //Поле не может быть null
     @Setter
     @JacksonXmlProperty(localName = "groupAdmin")
-    private Person groupAdmin; //Поле не может быть null
+    private Person groupAdmin; //Поле может быть null
     @Setter
     @JacksonXmlProperty(localName = "formOfEducation")
     private FormOfEducation formOfEducation; //Поле может быть null
+
+    public StudyGroup() { }
+
+    public StudyGroup(Integer id, String name, Coordinates coordinates, Integer studentsCount, int transferredStudents, Semester semesterEnum, FormOfEducation formOfEducation, ZonedDateTime creationDate, Person groupAdmin) {
+        this.id = id;
+        this.name = name;
+        this.coordinates = coordinates;
+        this.studentsCount = studentsCount;
+        this.transferredStudents = transferredStudents;
+        this.semesterEnum = semesterEnum;
+        this.formOfEducation = formOfEducation;
+        this.creationDate = creationDate;
+        this.groupAdmin = groupAdmin;
+    }
 
     public void setName(String name) {
         if (name == null) throw new IllegalArgumentException("Name can't be null");

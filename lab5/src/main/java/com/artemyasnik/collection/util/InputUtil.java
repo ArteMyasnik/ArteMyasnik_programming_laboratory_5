@@ -45,8 +45,10 @@ public final class InputUtil {
                 Arrays.toString(FormOfEducation.values())), studyGroup::setFormOfEducation, FormOfEducation::valueOf, ioWorker));
 
         int newId = IdGenerator.getInstance().generateId();
+//        if (studyGroup.getGroupAdmin() != null) { studyGroup.getGroupAdmin().setId(newId); }
         studyGroup.setId(newId);
 
+        // save in studyGroupDAO
         return studyGroup;
     }
 

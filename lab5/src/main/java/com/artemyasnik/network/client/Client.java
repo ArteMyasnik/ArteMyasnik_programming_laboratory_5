@@ -13,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.artemyasnik.collection.util.InputUtil.get;
 
@@ -25,6 +27,15 @@ public final class Client implements Runnable {
     private InetSocketAddress serverAddress;
     private static final int RESPONSE_TIMEOUT = 5000;
     private static final int MAX_REQUEST_ATTEMPTS = 3;
+
+    // Thread pools
+    private final ExecutorService requestReadingPool = Executors.newCachedThreadPool();
+    private final ForkJoinPool requestProcessingPool = new ForkJoinPool();
+    private final ForkJoinPool responseSendingPool = new ForkJoinPool();
+
+    // Synchronized collections
+    private final Queue<Request> requestQueue = new ConcurrentLinkedQueue<>();
+    private final Queue<Response> responseQueue = new ConcurrentLinkedQueue<>();
 
     public Client(ClientConfiguration config, ConsoleWorker console, IOWorker<String> script) {
         this.config = config;
@@ -40,18 +51,61 @@ public final class Client implements Runnable {
             serverAddress = new InetSocketAddress(config.host(), config.port());
 
             log.info("Client started with configuration: {}", config);
-
             console.writeln("Welcome to lab6 by ArteMyasnik!");
+
+            startRequestProcessingThread();
+            startResponseHandlingThread();
+
             String line;
             while ((line = console.read("$ ")) != null) {
-                handleInput(line);
-                while (!script.ready()) handleInput(script.read());
+                final String currentLine = line; // Создаем final копию
+                requestReadingPool.submit(() -> handleInput(currentLine));
+                while (!script.ready()) {
+                    String scriptLine = script.read();
+                    final String currentScriptLine = scriptLine;
+                    requestReadingPool.submit(() -> handleInput(currentScriptLine));
+                }
             }
         } catch (IOException e) {
             log.error("Client error: {}", e.getMessage());
         } finally {
             closeResources();
         }
+    }
+
+    private void startRequestProcessingThread() {
+        new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                if (!requestQueue.isEmpty()) {
+                    Request request = requestQueue.poll();
+                    if (request != null) {
+                        requestProcessingPool.submit(() -> {
+                            try {
+                                Response response = sendRequestWithRetry(request);
+                                if (response != null) {
+                                    responseQueue.add(response);
+                                }
+                            } catch (IOException e) {
+                                log.error("Error processing request: {}", e.getMessage());
+                            }
+                        });
+                    }
+                }
+            }
+        }).start();
+    }
+
+    private void startResponseHandlingThread() {
+        new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                if (!responseQueue.isEmpty()) {
+                    Response response = responseQueue.poll();
+                    if (response != null) {
+                        responseSendingPool.submit(() -> handleResponse(response));
+                    }
+                }
+            }
+        }).start();
     }
 
     private void handleInput(String line) {
@@ -62,19 +116,8 @@ public final class Client implements Runnable {
         }
 
         Request request = parseRequest(line);
-        if (request == null) return;
-
-        try {
-            Response response = sendRequestWithRetry(request);
-            if (response != null) {
-                handleResponse(response);
-            } else {
-                log.warn("Server is not responding, please try again later");
-                console.writeln("Server is not responding, please try again later");
-            }
-        } catch (IOException e) {
-            log.error("Network error: {}", e.getMessage());
-            console.writeln("Network error occurred: " + e.getMessage());
+        if (request != null) {
+            requestQueue.add(request);
         }
     }
 
@@ -83,7 +126,7 @@ public final class Client implements Runnable {
 
         String command = parts[0];
         List<String> args = parts.length > 1 ? Arrays.asList(parts[1].split(" ")) : Collections.emptyList();
-        final List<StudyGroup> studyGroup = new LinkedList<>();
+        final List<StudyGroup> studyGroup = Collections.synchronizedList(new LinkedList<>());
 
         int elementRequired = Router.getInstance().getElementRequired(command);
 
@@ -103,17 +146,17 @@ public final class Client implements Runnable {
     }
 
     private Response sendRequestWithRetry(Request request) throws IOException {
-        int attempts = 0;
+        AtomicInteger attempts = new AtomicInteger(0);
         while (true) {
-            attempts++;
+            if (attempts.incrementAndGet() > MAX_REQUEST_ATTEMPTS) {
+                throw new IOException("Server is not responding after " + MAX_REQUEST_ATTEMPTS + " attempts");
+            }
+
             try {
                 sendRequest(request);
                 return receiveResponse();
             } catch (SocketTimeoutException e) {
-                log.warn("Attempt {}: Server response timeout", attempts);
-                if (attempts >= MAX_REQUEST_ATTEMPTS) {
-                    throw new IOException("Server is not responding after " + MAX_REQUEST_ATTEMPTS + " attempts");
-                }
+                log.warn("Attempt {}: Server response timeout", attempts.get());
             }
         }
     }
@@ -145,7 +188,10 @@ public final class Client implements Runnable {
     private void closeResources() {
         if (socket != null && !socket.isClosed()) {
             socket.close();
-            log.info("Client stopped");
         }
+        requestReadingPool.shutdownNow();
+        requestProcessingPool.shutdownNow();
+        responseSendingPool.shutdownNow();
+        log.info("Client stopped");
     }
 }

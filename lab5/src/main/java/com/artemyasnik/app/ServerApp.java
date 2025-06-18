@@ -1,10 +1,13 @@
 package com.artemyasnik.app;
 
+import com.artemyasnik.collection.CollectionManager;
 import com.artemyasnik.io.configuration.FileConfiguration;
 import com.artemyasnik.io.workers.console.ConsoleWorker;
 import com.artemyasnik.io.workers.console.BufferedConsoleWorker;
 import com.artemyasnik.network.server.ServerConfiguration;
 import com.artemyasnik.network.server.Server;
+
+import java.io.IOException;
 
 public final class ServerApp {
     public static void main(String[] args) {
@@ -31,6 +34,32 @@ public final class ServerApp {
 
             consoleWorker.read("Press Enter to stop server..." + System.lineSeparator());
             server.stop();
+        }
+
+        try (Server server = new Server(config, consoleWorker)) {
+            server.registerShutdownHook();
+            new Thread(server).start();
+            consoleWorker.write("Server started. Type 'help' for available commands.\n");
+
+            while (server.isRunning()) {
+                String input = consoleWorker.read("$ ");
+                if (input == null) continue;
+
+                input = input.trim().toLowerCase();
+                switch (input) {
+                    case "exit":
+                        consoleWorker.write("Shutting down server...\n");
+                        server.stop();
+                        break;
+                    case "save":
+                        consoleWorker.write("Saving data...\n");
+                        CollectionManager.getInstance().save();
+                        consoleWorker.write("Data saved successfully.\n");
+                        break;
+                    default:
+                        consoleWorker.write("Unknown command. Type 'help' for available commands.\n");
+                }
+            }
         }
     }
 }
