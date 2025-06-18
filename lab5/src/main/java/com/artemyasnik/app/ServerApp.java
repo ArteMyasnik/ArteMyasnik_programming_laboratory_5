@@ -10,8 +10,6 @@ import org.slf4j.LoggerFactory;
 public final class ServerApp {
     private static final Logger log = LoggerFactory.getLogger(ServerApp.class);
 
-    private static final Logger log = LoggerFactory.getLogger(ServerApp.class);
-
     public static void main(String[] args) {
         ServerConfiguration config = new ServerConfiguration(9876, 8192);
         ConsoleWorker consoleWorker = new BufferedConsoleWorker();
