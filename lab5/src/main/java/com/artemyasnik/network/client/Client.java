@@ -60,7 +60,7 @@ public final class Client implements Runnable {
 
         userDTO = UserDTO.register(username, password);
         try {
-            Request authRequest = new Request("help", Collections.emptyList(), Collections.emptyList(), userDTO)
+            Request authRequest = new Request("help", Collections.emptyList(), Collections.emptyList(), userDTO);
             sendRequestWithRetry(authRequest);
             log.info("Request: {}", authRequest);
             Response response = receiveResponse();
