@@ -58,7 +58,7 @@ public final class Client implements Runnable {
         final String password = console.read("Enter password: ");
 
         try {
-            userDTO = UserDAO.getINSTANCE().registerUser(username, password);
+            userDTO = UserDTO.register(username, password);
         } catch (IllegalArgumentException | SQLException exception) {
             console.writeln("Error: " + exception.getMessage() + "Please try again");
             loginAttempts++;
