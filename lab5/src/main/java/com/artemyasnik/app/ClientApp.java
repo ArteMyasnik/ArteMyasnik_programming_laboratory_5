@@ -12,8 +12,19 @@ public final class ClientApp {
         ConsoleWorker consoleWorker = new BufferedConsoleWorker();
         IOWorker<String> script = new DequeWorker();
         ClientConfiguration config = new ClientConfiguration("localhost", 9876, 8192);
-
         Client client = new Client(config, consoleWorker, script);
-        client.run();
+        try {
+            new Thread(client).start();
+            while (true) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        } finally {
+            client.closeResources();
+        }
     }
 }

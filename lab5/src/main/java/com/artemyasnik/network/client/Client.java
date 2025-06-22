@@ -183,7 +183,7 @@ public final class Client implements Runnable {
         if (response.script() != null && !response.script().isEmpty()) script.insert(response.script());
     }
 
-    private void closeResources() {
+    public void closeResources() {
         if (socket != null && !socket.isClosed()) {
             socket.close();
         }
