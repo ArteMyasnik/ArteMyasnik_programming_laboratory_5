@@ -1,7 +1,7 @@
 <configuration>
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%highlight([%level]) %d{HH:mm:ss.SSS} %logger{64} - %msg%n</pattern>
+            <pattern>%highlight([%level]) [%thread] %d{HH:mm:ss.SSS} %logger{64} - %msg%n</pattern>
         </encoder>
     </appender>
 

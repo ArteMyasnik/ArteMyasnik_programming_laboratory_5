@@ -17,9 +17,5 @@ public record UserDTO(Integer id, String username, String passwordHash) {
         return new UserDTO(null, username, PasswordUtil.hash(plainPassword));
     }
 
-    public boolean authenticate(String plainPassword) { return PasswordUtil.verify(plainPassword, this.passwordHash); }
-
-    public static UserDTO withHashedPassword(Integer id, String username, String plainPassword) { return new UserDTO(id, username, PasswordUtil.hash(plainPassword)); }
-
-    public boolean verifyPassword(String plainPassword) { return PasswordUtil.verify(plainPassword, this.passwordHash); }
+    public boolean verify(String plainPassword) { return PasswordUtil.verify(plainPassword, this.passwordHash); }
 }

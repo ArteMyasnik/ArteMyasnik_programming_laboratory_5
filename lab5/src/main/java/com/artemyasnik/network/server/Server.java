@@ -1,6 +1,8 @@
 package com.artemyasnik.network.server;
 
 import com.artemyasnik.chat.Router;
+import com.artemyasnik.db.dao.UserDAO;
+import com.artemyasnik.db.dto.UserDTO;
 import com.artemyasnik.io.transfer.Request;
 import com.artemyasnik.io.transfer.Response;
 import com.artemyasnik.io.workers.console.ConsoleWorker;
@@ -14,9 +16,9 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Queue;
+import javax.security.auth.login.CredentialException;
+import java.sql.SQLException;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,6 +42,7 @@ public final class Server implements Runnable, AutoCloseable {
     private final ExecutorService requestReaderPool = Executors.newCachedThreadPool();
     private final ForkJoinPool requestProcessorPool = new ForkJoinPool();
     private final ForkJoinPool responseSenderPool = new ForkJoinPool();
+    private UserDAO userDAO;
 
     public Server(ServerConfiguration config, ConsoleWorker console) {
         this.config = config;
@@ -135,14 +138,14 @@ public final class Server implements Runnable, AutoCloseable {
                 buffer.flip();
                 Request request = SerializationUtils.deserialize(buffer.array());
                 log.info("Received request from {}: {} - {}", clientAddress, request.command(), request);
-
+                checkUser(request, clientAddress);
                 requestProcessorPool.submit(() -> {
                     Response response = processRequest(request);
                     log.info("Response: {}", response);
 
                     synchronized (responseQueue) {
                         if (responseQueue.size() >= MAX_RESPONSE_QUEUE_SIZE) {
-                            sendResponseImmediately(new Response("Server is busy, please try again later"), clientAddress);
+                            sendResponseImmediately(new Response("Server is busy, please try again later", request.userDTO()), clientAddress);
                             log.warn("Max response queue size reached");
                         } else {
                             responseQueue.add(new ClientResponse(response, clientAddress));
@@ -151,8 +154,38 @@ public final class Server implements Runnable, AutoCloseable {
                     }
                 });
             }
+        } catch (CredentialException credentialException) {
+            log.warn("Client tried to login and failed: {}", credentialException.getMessage());
+        } catch (SQLException e) {
+            log.warn("{}", e.getMessage());
         } finally {
             releaseBuffer(buffer);
+        }
+    }
+
+    private void checkUser(Request request, InetSocketAddress clientAddress) throws CredentialException, SQLException, IOException {
+        if (request.userDTO() == null) {
+            sendResponse(new ClientResponse(new Response("You are not logged in. Authorization failed.", request.userDTO()), clientAddress));
+            throw new CredentialException("You are not logged in. Authorization failed.");
+        }
+        if (request.userDTO().username().isBlank()) {
+            sendResponse(new ClientResponse(new Response("Username cannot be empty. Authorization failed.", request.userDTO()), clientAddress));
+            throw new CredentialException("Username cannot be empty. Authorization failed.");
+        }
+        if (request.userDTO().passwordHash().isBlank()) {
+            sendResponse(new ClientResponse(new Response("Password cannot be empty. Authorization failed.", request.userDTO()), clientAddress));
+            throw new CredentialException("Password cannot be empty. Authorization failed.");
+        }
+
+        Optional<UserDTO> optionalUserDTO = UserDAO.getINSTANCE().verify(request.userDTO().username(), request.userDTO().passwordHash());
+
+        if (optionalUserDTO.isEmpty()) {
+            UserDAO.getINSTANCE().registerUser(request.userDTO().username(), request.userDTO().passwordHash());
+            optionalUserDTO = UserDAO.getINSTANCE().findByUsername(request.userDTO().username());
+        }
+        if (optionalUserDTO.isEmpty()) {
+            sendResponse(new ClientResponse(new Response("Authorization failed. Internal server error. Authorization failed.", request.userDTO()), clientAddress));
+            throw new CredentialException("Authorization failed. Internal server error. Authorization failed.");
         }
     }
 

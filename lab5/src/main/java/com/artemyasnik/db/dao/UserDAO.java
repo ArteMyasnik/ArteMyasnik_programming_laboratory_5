@@ -1,5 +1,6 @@
 package com.artemyasnik.db.dao;
 
+import com.artemyasnik.collection.passport.PassportValidator;
 import com.artemyasnik.db.ConnectionFactory;
 import com.artemyasnik.db.dto.UserDTO;
 import com.artemyasnik.db.query.UserQuery;
@@ -20,6 +21,12 @@ public class UserDAO {
 //        }
 //    }
 
+    private static UserDAO INSTANCE;
+
+    public static UserDAO getINSTANCE() {
+        return INSTANCE == null ? INSTANCE = new UserDAO() : INSTANCE;
+    }
+
     public Optional<UserDTO> findById(int id) throws SQLException {
         try (Connection connection = ConnectionFactory.getInstance().getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(UserQuery.FIND_BY_ID.getQuery())) {
@@ -37,17 +44,16 @@ public class UserDAO {
         }
     }
 
-    public UserDTO create(UserDTO user) throws SQLException {
-        Objects.requireNonNull(user, "User cannot be null");
-
+    public UserDTO create(UserDTO userDTO) throws SQLException {
+        Objects.requireNonNull(userDTO, "User cannot be null");
         try (Connection conn = ConnectionFactory.getInstance().getConnection();
              PreparedStatement preparedStatement = conn.prepareStatement(UserQuery.SAVE.getQuery(), Statement.RETURN_GENERATED_KEYS)) {
-            preparedStatement.setString(1, user.username());
-            preparedStatement.setString(2, user.passwordHash());
+            preparedStatement.setString(1, userDTO.username());
+            preparedStatement.setString(2, userDTO.passwordHash());
             int affectedRows = preparedStatement.executeUpdate();
             if (affectedRows == 0) { throw new SQLException("Creating user failed, no rows affected."); }
             try (ResultSet resultSet = preparedStatement.getGeneratedKeys()) {
-                if (resultSet.next()) { return new UserDTO(resultSet.getInt(1), user.username(), user.passwordHash()); }
+                if (resultSet.next()) { return new UserDTO(resultSet.getInt(1), userDTO.username(), userDTO.passwordHash()); }
                 throw new SQLException("Creating user failed, no ID obtained.");
             }
         }
@@ -56,7 +62,6 @@ public class UserDAO {
     public boolean existsByUsername(String username) throws SQLException {
         try (Connection connection = ConnectionFactory.getInstance().getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(UserQuery.EXISTS_BY_USERNAME.getQuery())) {
-
             preparedStatement.setString(1, username);
             try (ResultSet resultSet = preparedStatement.executeQuery()) {
                 return resultSet.next() && resultSet.getInt(1) > 0;
@@ -69,10 +74,10 @@ public class UserDAO {
         return create(UserDTO.register(username, password));
     }
 
-    public Optional<UserDTO> authenticate(String username, String password) throws SQLException {
+    public Optional<UserDTO> verify(String username, String password) throws SQLException {
         Optional<UserDTO> userOpt = findByUsername(username);
         if (userOpt.isEmpty()) { return Optional.empty(); }
-        return userOpt.get().authenticate(password) ? userOpt : Optional.empty();
+        return userOpt.get().verify(password) ? userOpt : Optional.empty();
     }
 
     private Optional<UserDTO> executeQueryForSingleResult(PreparedStatement preparedStatement) throws SQLException {

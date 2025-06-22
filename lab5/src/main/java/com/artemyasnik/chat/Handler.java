@@ -63,7 +63,7 @@ public final class Handler implements Runnable {
             }
         }
 
-        return new Request(command, args, studyGroup, new UserDTO(0, "host", "password"));
+        return new Request(command, args, studyGroup, UserDTO.register("host", "password"));
     }
 
     private void print(final Response response) {

@@ -12,12 +12,12 @@ public final class RemoveLower extends Command {
     @Override
     public Response execute(Request request) {
         if (request.studyGroup() == null || request.studyGroup().isEmpty()) {
-            return new Response("No study group to compare.");
+            return new Response("No study group to compare.", request.userDTO());
         }
         if (CollectionManager.getInstance().getCollection().isEmpty()) {
-            return new Response("Collection is empty");
+            return new Response("Collection is empty", request.userDTO());
         }
         CollectionManager.getInstance().getCollection().removeIf(studyGroup -> studyGroup.compareTo(request.studyGroup().get(0)) < 0);
-        return new Response("Study groups that are lower, than the given element successfully removed");
+        return new Response("Study groups that are lower, than the given element successfully removed", request.userDTO());
     }
 }

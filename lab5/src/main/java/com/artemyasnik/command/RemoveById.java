@@ -12,11 +12,11 @@ public final class RemoveById extends Command {
     @Override
     public Response execute(Request request) {
         if (request.args() == null) {
-            return new Response("Type the id argument");
+            return new Response("Type the id argument", request.userDTO());
         }
         if (CollectionManager.getInstance().getCollection().isEmpty()) {
-            return new Response("Collection is empty");
+            return new Response("Collection is empty", request.userDTO());
         }
-        return new Response(CollectionManager.getInstance().removeById(Integer.valueOf(request.args().get(0)), request.userDTO().id()));
+        return new Response(CollectionManager.getInstance().removeById(Integer.valueOf(request.args().get(0)), request.userDTO().id()), request.userDTO());
     }
 }

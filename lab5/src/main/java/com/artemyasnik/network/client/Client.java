@@ -2,7 +2,6 @@ package com.artemyasnik.network.client;
 
 import com.artemyasnik.chat.Router;
 import com.artemyasnik.collection.classes.StudyGroup;
-import com.artemyasnik.db.dao.UserDAO;
 import com.artemyasnik.db.dto.UserDTO;
 import com.artemyasnik.io.IOWorker;
 import com.artemyasnik.io.transfer.Request;
@@ -14,7 +13,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.*;
-import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -32,8 +30,9 @@ public final class Client implements Runnable {
     private final ExecutorService requestSenderPool = Executors.newCachedThreadPool();
     private final ForkJoinPool responseProcessorPool = new ForkJoinPool();
     private final Queue<Response> responseQueue = new LinkedBlockingQueue<>();
-    private final UserDAO userDAO = new UserDAO();
-    private UserDTO currentUser;
+
+    private int loginAttempts = 0;
+    private UserDTO userDTO = null;
 
     public Client(ClientConfiguration config, ConsoleWorker console, IOWorker<String> script) {
         this.config = config;
@@ -41,100 +40,60 @@ public final class Client implements Runnable {
         this.script = script;
     }
 
+    private void init() throws SocketException {
+        socket = new DatagramSocket();
+        socket.setSoTimeout(RESPONSE_TIMEOUT);
+        serverAddress = new InetSocketAddress(config.host(), config.port());
+
+        log.info("Client started with configuration: {}", config);
+        console.writeln("Welcome to lab7 by ArteMyasnik!");
+    }
+
+
+    private void getUser() {
+        if (loginAttempts > 5) {
+            console.writeln("Attempts exceeded.");
+            System.exit(1);
+        }
+
+        console.writeln("Enter username and password to authorize. Attempts left: " + (5 - loginAttempts));
+        final String username = console.read("Enter login: ");
+        final String password = console.read("Enter password: ");
+
+        userDTO = UserDTO.register(username, password);
+        try {
+            sendRequest(new Request("help", Collections.emptyList(), Collections.emptyList(), userDTO));
+            Response response = receiveResponse();
+            if (response.message().contains("Authorization failed.")) {
+                loginAttempts++;
+                console.writeln(response.message());
+                getUser();
+            }
+            console.writeln("You logged in successfully!");
+        } catch (IOException e) {
+            console.writeln("Failed to send request: " + e);
+        }
+    }
+
     @Override
     public void run() {
         try {
-            socket = new DatagramSocket();
-            socket.setSoTimeout(RESPONSE_TIMEOUT);
-            serverAddress = new InetSocketAddress(config.host(), config.port());
-
-            log.info("Client started with configuration: {}", config);
-            console.writeln("Welcome to lab7 by ArteMyasnik!");
-
-            if (!authenticateUser()) {
-                console.writeln("Authentication failed. Exiting...");
-                return;
-            }
-
+            init();
+            getUser();
             String line;
             while ((line = console.read("$ ")) != null) {
                 final String currentLine = line;
                 requestSenderPool.submit(() -> handleInput(currentLine));
                 while (!script.ready()) {
-                    String scriptLine = script.read();
-                    final String currentScriptLine = scriptLine;
+                    final String currentScriptLine = script.read();
                     requestSenderPool.submit(() -> handleInput(currentScriptLine));
                 }
                 processResponses();
             }
-        } catch (IOException e) {
-            log.error("Client error: {}", e.getMessage());
+        } catch (SocketException e) {
+            throw new RuntimeException(e);
         } finally {
             closeResources();
-        }
-    }
-
-    private boolean authenticateUser() throws IOException {
-        while (true) {
-            console.writeln("Choose action:");
-            console.writeln("1. Login");
-            console.writeln("2. Register");
-            console.writeln("3. Exit");
-
-            String choice = console.read("$ ").trim();
-
-            try {
-                switch (choice) {
-                    case "1":
-                        return login();
-                    case "2":
-                        return register();
-                    case "3":
-                        return false;
-                    default:
-                        console.writeln("Invalid choice. Please try again.");
-                }
-            } catch (SQLException e) {
-                console.writeln("Database error: " + e.getMessage());
-                return false;
-            }
-        }
-    }
-
-    private boolean login() throws SQLException, IOException {
-        console.writeln("=== Login ===");
-        String username = console.read("Username: ").trim();
-        String password = console.read("Password: ").trim();
-
-        Optional<UserDTO> user = userDAO.authenticate(username, password);
-        if (user.isPresent()) {
-            currentUser = user.get();
-            console.writeln("Login successful! Welcome, " + username);
-            return true;
-        } else {
-            console.writeln("Invalid username or password");
-            return false;
-        }
-    }
-
-    private boolean register() throws SQLException, IOException {
-        console.writeln("=== Registration ===");
-        String username = console.read("Choose username: ").trim();
-        String password = console.read("Choose password: ").trim();
-        String confirmPassword = console.read("Confirm password: ").trim();
-
-        if (!password.equals(confirmPassword)) {
-            console.writeln("Passwords do not match");
-            return false;
-        }
-
-        try {
-            currentUser = userDAO.registerUser(username, password);
-            console.writeln("Registration successful! Welcome, " + username);
-            return true;
-        } catch (IllegalArgumentException e) {
-            console.writeln("Error: " + e.getMessage());
-            return false;
         }
     }
 
@@ -146,10 +105,12 @@ public final class Client implements Runnable {
         }
 
         Request request = parseRequest(line);
+        log.info("Request: {}", request);
         if (request == null) return;
 
         try {
             Response response = sendRequestWithRetry(request);
+            log.info("Response: {}", response);
             if (response != null) {
                 responseQueue.offer(response);
             } else {
@@ -177,9 +138,7 @@ public final class Client implements Runnable {
         String command = parts[0];
         List<String> args = parts.length > 1 ? Arrays.asList(parts[1].split(" ")) : Collections.emptyList();
         final List<StudyGroup> studyGroup = Collections.synchronizedList(new LinkedList<>());
-
         int elementRequired = Router.getInstance().getElementRequired(command);
-
         while (elementRequired-- > 0) {
             try {
                 studyGroup.add(get(script.ready() ? console : script));
@@ -191,8 +150,7 @@ public final class Client implements Runnable {
                 return null;
             }
         }
-
-        return new Request(command, args, studyGroup, currentUser);
+        return new Request(command, args, studyGroup, userDTO);
     }
 
     private Response sendRequestWithRetry(Request request) throws IOException {

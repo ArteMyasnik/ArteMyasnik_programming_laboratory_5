@@ -19,23 +19,23 @@ public final class ExecuteScript extends Command {
     @Override
     public Response execute(Request request) {
         if (request.args() == null || request.args().isEmpty()) {
-            return new Response("No file to execute");
+            return new Response("No file to execute", request.userDTO());
         }
 
         final Path path = Paths.get(request.args().get(0));
 
-        if (!Files.exists(path)) return new Response("File doesn't exist");
-        if (!Files.isReadable(path)) return new Response("File cannot be read");
-        if (!Files.isRegularFile(path)) return new Response("File isn't a file");
+        if (!Files.exists(path)) return new Response("File doesn't exist", request.userDTO());
+        if (!Files.isReadable(path)) return new Response("File cannot be read", request.userDTO());
+        if (!Files.isRegularFile(path)) return new Response("File isn't a file", request.userDTO());
 
         try (FileWorker file = new BufferedFileWorker(path)) {
             StringBuilder script = new StringBuilder();
             while (file.ready()) {
                 script.append(file.read()).append(System.lineSeparator());
             }
-            return new Response("Script loaded successfully", Collections.emptyList(), script.toString());
+            return new Response("Script loaded successfully", Collections.emptyList(), script.toString(), request.userDTO());
         } catch (Exception e) {
-            return new Response("Error: %s%n".formatted(e.getMessage()));
+            return new Response("Error: %s%n".formatted(e.getMessage()), request.userDTO());
         }
     }
 }

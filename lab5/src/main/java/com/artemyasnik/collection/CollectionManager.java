@@ -17,7 +17,6 @@ public final class CollectionManager {
     private static CollectionManager INSTANCE;
     private static final Logger log = LoggerFactory.getLogger(CollectionManager.class);
     private static final ReentrantLock lock = new ReentrantLock();
-
     private final List<StudyGroup> collection;
     private final LocalDateTime initializationDate;
     private final StudyGroupDAO studyGroupDAO;
@@ -153,7 +152,6 @@ public final class CollectionManager {
     public String clear(int ownerId) {
         lock.lock();
         try {
-            // Получаем только группы владельца
             List<StudyGroup> ownerGroups = collection.stream()
                     .filter(g -> {
                         try {
@@ -163,9 +161,8 @@ public final class CollectionManager {
                             return false;
                         }
                     })
-                    .collect(Collectors.toList());
+                    .toList();
 
-            // Удаляем из БД
             for (StudyGroup group : ownerGroups) {
                 studyGroupDAO.removeFromDatabase(group.getId(), ownerId);
                 if (group.getGroupAdmin() != null) {
@@ -173,7 +170,6 @@ public final class CollectionManager {
                 }
             }
 
-            // Удаляем из коллекции
             collection.removeAll(ownerGroups);
 
             return "Removed " + ownerGroups.size() + " study groups";

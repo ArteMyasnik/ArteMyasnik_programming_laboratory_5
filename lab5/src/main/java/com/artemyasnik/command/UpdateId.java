@@ -12,20 +12,20 @@ public final class UpdateId extends Command {
     @Override
     public Response execute(Request request) {
         if (request.args() == null) {
-            return new Response("Type the id argument");
+            return new Response("Type the id argument", request.userDTO());
         }
         if (CollectionManager.getInstance().getCollection().isEmpty()) {
-            return new Response("Collection is empty");
+            return new Response("Collection is empty", request.userDTO());
         }
         if (request.studyGroup() == null || request.studyGroup().isEmpty()) {
-            return new Response("No study group to update");
+            return new Response("No study group to update", request.userDTO());
         }
         if (CollectionManager.getInstance().removeById(Integer.valueOf(request.args().get(0)), request.userDTO().id())
                 .equalsIgnoreCase("Element with id " + Integer.valueOf(request.args().get(0)) + " was successfully removed")) {
             CollectionManager.getInstance().getCollection().add(request.studyGroup().get(0));
-            return new Response("Study group updated successfully");
+            return new Response("Study group updated successfully", request.userDTO());
         } else {
-            return new Response(CollectionManager.getInstance().removeById(Integer.valueOf(request.args().get(0)), request.userDTO().id()));
+            return new Response(CollectionManager.getInstance().removeById(Integer.valueOf(request.args().get(0)), request.userDTO().id()), request.userDTO());
         }
     }
 }

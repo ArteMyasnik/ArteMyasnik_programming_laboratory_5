@@ -12,6 +12,6 @@ public final class Info extends Command {
 
     @Override
     public Response execute(Request request) {
-        return new Response(CollectionManager.getInstance().info());
+        return new Response(CollectionManager.getInstance().info(), request.userDTO());
     }
 }

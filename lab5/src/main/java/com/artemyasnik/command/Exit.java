@@ -11,6 +11,6 @@ public final class Exit extends Command {
     @Override
     public Response execute(Request request) {
         System.exit(0);
-        return new Response("Exiting...");
+        return new Response("Exiting...", request.userDTO());
     }
 }

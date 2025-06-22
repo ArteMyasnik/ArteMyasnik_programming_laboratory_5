@@ -18,10 +18,10 @@ public final class FilterLessThanFormOfEducation extends Command {
     @Override
     public Response execute(Request request) {
         if (request.args() == null) {
-            return new Response("Type the FormOfEducation argument");
+            return new Response("Type the FormOfEducation argument", request.userDTO());
         }
         if (CollectionManager.getInstance().getCollection().isEmpty()) {
-            return new Response("Collection is empty");
+            return new Response("Collection is empty", request.userDTO());
         }
         FormOfEducation targetForm;
         try {
@@ -30,7 +30,7 @@ public final class FilterLessThanFormOfEducation extends Command {
             return new Response("Error: Invalid formOfEducation. Available values: " +
                     Arrays.stream(FormOfEducation.values())
                             .map(Enum::name)
-                            .collect(Collectors.joining(", ")));
+                            .collect(Collectors.joining(", ")), request.userDTO());
         }
 
         List<StudyGroup> filtered = CollectionManager.getInstance().getCollection().stream()
@@ -39,11 +39,11 @@ public final class FilterLessThanFormOfEducation extends Command {
                 .toList();
 
         if (filtered.isEmpty()) {
-            return new Response("No elements with formOfEducation less than %s%n".formatted(targetForm));
+            return new Response("No elements with formOfEducation less than %s%n".formatted(targetForm), request.userDTO());
         }
         String result = filtered.stream()
                 .map(StudyGroup::toString)
                 .collect(Collectors.joining((System.lineSeparator() + System.lineSeparator())));
-        return new Response(result);
+        return new Response(result, request.userDTO());
     }
 }

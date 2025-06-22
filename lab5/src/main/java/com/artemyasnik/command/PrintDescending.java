@@ -16,13 +16,13 @@ public final class PrintDescending extends Command {
     @Override
     public Response execute(Request request) {
         if (CollectionManager.getInstance().getCollection().isEmpty()) {
-            return new Response("Collection is empty");
+            return new Response("Collection is empty", request.userDTO());
         }
         return new Response("%s".formatted(
                 CollectionManager.getInstance().getCollection().stream()
                         .sorted(Comparator.reverseOrder())
                         .map(StudyGroup::toString)
                         .collect(Collectors.joining(System.lineSeparator()))
-        ));
+        ), request.userDTO());
     }
 }

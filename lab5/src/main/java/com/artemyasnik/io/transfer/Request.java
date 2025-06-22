@@ -6,5 +6,4 @@ import com.artemyasnik.db.dto.UserDTO;
 import java.io.Serializable;
 import java.util.List;
 
-public record Request(String command, List<String> args, List<StudyGroup> studyGroup, UserDTO userDTO) implements Serializable {
-}
+public record Request(String command, List<String> args, List<StudyGroup> studyGroup, UserDTO userDTO) implements Serializable {}

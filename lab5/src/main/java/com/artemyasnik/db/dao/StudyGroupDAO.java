@@ -119,9 +119,9 @@ public class StudyGroupDAO {
                     throw new IllegalArgumentException("User is not the owner of this study group");
                 }
 
-                Integer adminId = getCurrentStudyGroupGroupAdminId(connection, studyGroupId);
-                if (adminId != null) {
-                    PersonDAO.getInstance().removeById(connection, adminId);
+                Integer groupAdminId = getCurrentStudyGroupGroupAdminId(connection, studyGroupId);
+                if (groupAdminId != null) {
+                    PersonDAO.getInstance().removeById(connection, groupAdminId);
                 }
 
                 try (PreparedStatement preparedStatement = connection.prepareStatement(

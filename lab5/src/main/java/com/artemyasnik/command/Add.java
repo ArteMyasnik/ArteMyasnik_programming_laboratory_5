@@ -12,9 +12,9 @@ public final class Add extends Command {
     @Override
     public Response execute(Request request) {
         if (request.studyGroup() == null || request.studyGroup().isEmpty()) {
-            return new Response("No study group to add");
+            return new Response("No study group to add", request.userDTO());
         }
         CollectionManager.getInstance().getCollection().add(request.studyGroup().get(0));
-        return new Response("Study group added");
+        return new Response("Study group added", request.userDTO());
     }
 }

@@ -12,8 +12,8 @@ public final class Save extends Command {
     @Override
     public Response execute(Request request) {
         if (CollectionManager.getInstance().getCollection().isEmpty()) {
-            return new Response("Collection is empty");
+            return new Response("Collection is empty", request.userDTO());
         }
-        return new Response(CollectionManager.getInstance().save());
+        return new Response(CollectionManager.getInstance().save(), request.userDTO());
     }
 }

@@ -17,13 +17,13 @@ public final class PrintUniqueGroupAdmin extends Command {
     @Override
     public Response execute(Request request) {
         if (CollectionManager.getInstance().getCollection().isEmpty()) {
-            return new Response("Collection is empty");
+            return new Response("Collection is empty", request.userDTO());
         }
         List<Person> uniqueAdmins = CollectionManager.getInstance().getCollection().stream()
                 .map(StudyGroup::getGroupAdmin)
                 .distinct()
                 .filter(Objects::nonNull)
                 .toList();
-        return new Response(uniqueAdmins.toString());
+        return new Response(uniqueAdmins.toString(), request.userDTO());
     }
 }
