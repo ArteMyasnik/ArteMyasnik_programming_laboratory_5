@@ -48,7 +48,6 @@ public final class CollectionManager {
             collection.clear();
             List<StudyGroup> loadedGroups = studyGroupDAO.findAllWithPerson();
 
-            // Инициализация генератора ID
             int maxId = loadedGroups.stream()
                     .mapToInt(StudyGroup::getId)
                     .max()
@@ -57,7 +56,6 @@ public final class CollectionManager {
 
             collection.addAll(loadedGroups);
 
-            // Регистрация всех passportID
             loadedGroups.stream()
                     .filter(g -> g.getGroupAdmin() != null)
                     .forEach(g -> passportValidator.validate(g.getGroupAdmin().getPassportID()));
