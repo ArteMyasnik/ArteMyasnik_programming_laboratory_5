@@ -14,8 +14,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.*;
 import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.locks.ReentrantLock;
 
 import static com.artemyasnik.collection.util.InputUtil.get;
 
@@ -28,7 +26,6 @@ public final class Client implements Runnable {
     private InetSocketAddress serverAddress;
     private static final int RESPONSE_TIMEOUT = 5000;
     private static final int MAX_REQUEST_ATTEMPTS = 3;
-    private final ExecutorService requestSenderPool = Executors.newCachedThreadPool();
 
     private int loginAttempts = 0;
     private UserDTO userDTO = null;
@@ -83,11 +80,9 @@ public final class Client implements Runnable {
             getUser();
             String line;
             while ((line = console.read("$ ")) != null) {
-                final String currentLine = line;
-                requestSenderPool.execute(() -> handleInput(currentLine));
+                handleInput(line);
                 while (!script.ready()) {
-                    final String currentScriptLine = script.read();
-                    requestSenderPool.execute(() -> handleInput(currentScriptLine));
+                    handleInput(script.read());
                 }
             }
         } catch (SocketException e) {
@@ -186,8 +181,7 @@ public final class Client implements Runnable {
     public void closeResources() {
         if (socket != null && !socket.isClosed()) {
             socket.close();
+            log.info("Client stopped");
         }
-        requestSenderPool.shutdownNow();
-        log.info("Client stopped");
     }
 }
