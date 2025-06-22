@@ -83,10 +83,10 @@ public final class Client implements Runnable {
             String line;
             while ((line = console.read("$ ")) != null) {
                 final String currentLine = line;
-                requestSenderPool.submit(() -> handleInput(currentLine));
+                requestSenderPool.execute(() -> handleInput(currentLine));
                 while (!script.ready()) {
                     final String currentScriptLine = script.read();
-                    requestSenderPool.submit(() -> handleInput(currentScriptLine));
+                    requestSenderPool.execute(() -> handleInput(currentScriptLine));
                 }
                 processResponses();
             }
@@ -127,7 +127,7 @@ public final class Client implements Runnable {
         synchronized (responseQueue) {
             while (!responseQueue.isEmpty()) {
                 Response response = responseQueue.poll();
-                responseProcessorPool.submit(() -> handleResponse(response));
+                responseProcessorPool.execute(() -> handleResponse(response));
             }
         }
     }

@@ -139,7 +139,7 @@ public final class Server implements Runnable, AutoCloseable {
                 Request request = SerializationUtils.deserialize(buffer.array());
                 log.info("Received request from {}: {} - {}", clientAddress, request.command(), request);
                 Request registered = new Request(request.command(), request.args(), request.studyGroup(), checkUser(request, clientAddress));
-                requestProcessorPool.submit(() -> {
+                requestProcessorPool.execute(() -> {
                     Response response = processRequest(registered);
                     log.info("Response: {}", response);
 
