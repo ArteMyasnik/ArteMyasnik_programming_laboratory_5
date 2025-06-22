@@ -5,7 +5,7 @@ import com.artemyasnik.db.query.PersonQuery;
 
 import java.sql.*;
 
-public class PersonDAO {
+public final class PersonDAO {
     private static PersonDAO INSTANCE;
 
     private PersonDAO() {}

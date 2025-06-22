@@ -138,14 +138,14 @@ public final class Server implements Runnable, AutoCloseable {
                 buffer.flip();
                 Request request = SerializationUtils.deserialize(buffer.array());
                 log.info("Received request from {}: {} - {}", clientAddress, request.command(), request);
-                checkUser(request, clientAddress);
+                Request registered = new Request(request.command(), request.args(), request.studyGroup(), checkUser(request, clientAddress));
                 requestProcessorPool.submit(() -> {
-                    Response response = processRequest(request);
+                    Response response = processRequest(registered);
                     log.info("Response: {}", response);
 
                     synchronized (responseQueue) {
                         if (responseQueue.size() >= MAX_RESPONSE_QUEUE_SIZE) {
-                            sendResponseImmediately(new Response("Server is busy, please try again later", request.userDTO()), clientAddress);
+                            sendResponseImmediately(new Response("Server is busy, please try again later", registered.userDTO()), clientAddress);
                             log.warn("Max response queue size reached");
                         } else {
                             responseQueue.add(new ClientResponse(response, clientAddress));
@@ -163,7 +163,7 @@ public final class Server implements Runnable, AutoCloseable {
         }
     }
 
-    private void checkUser(Request request, InetSocketAddress clientAddress) throws CredentialException, SQLException, IOException {
+    private UserDTO checkUser(Request request, InetSocketAddress clientAddress) throws CredentialException, SQLException, IOException {
         if (request.userDTO() == null) {
             sendResponse(new ClientResponse(new Response("You are not logged in. Authorization failed.", request.userDTO()), clientAddress));
             throw new CredentialException("You are not logged in. Authorization failed.");
@@ -180,13 +180,14 @@ public final class Server implements Runnable, AutoCloseable {
         Optional<UserDTO> optionalUserDTO = UserDAO.getINSTANCE().verify(request.userDTO().username(), request.userDTO().passwordHash());
 
         if (optionalUserDTO.isEmpty()) {
-            UserDAO.getINSTANCE().registerUser(request.userDTO().username(), request.userDTO().passwordHash());
-            optionalUserDTO = UserDAO.getINSTANCE().findByUsername(request.userDTO().username());
+            Request registered = new Request(request.command(), request.args(), request.studyGroup(), UserDAO.getINSTANCE().registerUser(request.userDTO().username(), request.userDTO().passwordHash()));
+            optionalUserDTO = UserDAO.getINSTANCE().findByUsername(registered.userDTO().username());
         }
         if (optionalUserDTO.isEmpty()) {
             sendResponse(new ClientResponse(new Response("Authorization failed. Internal server error. Authorization failed.", request.userDTO()), clientAddress));
             throw new CredentialException("Authorization failed. Internal server error. Authorization failed.");
         }
+        return optionalUserDTO.get();
     }
 
     private Response processRequest(Request request) {

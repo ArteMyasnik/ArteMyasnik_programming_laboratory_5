@@ -1,6 +1,5 @@
 package com.artemyasnik.db.dao;
 
-import com.artemyasnik.collection.passport.PassportValidator;
 import com.artemyasnik.db.ConnectionFactory;
 import com.artemyasnik.db.dto.UserDTO;
 import com.artemyasnik.db.query.UserQuery;
@@ -11,16 +10,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-public class UserDAO {
-//
-//    public List<UserDTO> findAll() throws SQLException {
-//        try (Connection connection = ConnectionFactory.getInstance().getConnection();
-//             PreparedStatement preparedStatement = connection.prepareStatement(UserQuery.FIND_ALL.getQuery());
-//             ResultSet resultSet = preparedStatement.executeQuery()) {
-//            return mapResultSetToList(resultSet);
-//        }
-//    }
-
+public final class UserDAO {
     private static UserDAO INSTANCE;
 
     public static UserDAO getINSTANCE() {

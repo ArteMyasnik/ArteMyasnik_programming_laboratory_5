@@ -10,7 +10,7 @@ import java.time.ZoneId;
 import java.util.LinkedList;
 import java.util.List;
 
-public class StudyGroupDAO {
+public final class StudyGroupDAO {
     private static StudyGroupDAO INSTANCE;
 
     private StudyGroupDAO() {}
