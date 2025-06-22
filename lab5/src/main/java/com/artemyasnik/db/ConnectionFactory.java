@@ -92,18 +92,6 @@ public final class ConnectionFactory {
         return connection;
     }
 
-    public PreparedStatement prepareStatement(String sql) throws SQLException {
-        return getInstance().getConnection().prepareStatement(sql);
-    }
-
-    public PreparedStatement prepareStatement(String sql, Object... params) throws SQLException {
-        PreparedStatement preparedStatement = prepareStatement(sql);
-        for (int i = 0; i < params.length; i++) {
-            preparedStatement.setObject(i + 1, params[i]);
-        }
-        return preparedStatement;
-    }
-
     public void close() {
         if (connection != null) {
             try {

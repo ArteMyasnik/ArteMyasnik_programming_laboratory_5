@@ -59,15 +59,14 @@ public final class Client implements Runnable {
 
         try {
             userDTO = UserDAO.getINSTANCE().registerUser(username, password);
-        } catch (SQLException e) {
-            console.writeln("Error: " + e.getMessage() + "Please try again");
+        } catch (IllegalArgumentException | SQLException exception) {
+            console.writeln("Error: " + exception.getMessage() + "Please try again");
             loginAttempts++;
             getUser();
         }
         try {
             Request authRequest = new Request("help", Collections.emptyList(), Collections.emptyList(), userDTO);
             sendRequest(authRequest);
-//            log.info("Request: {}", authRequest);
             Response response = receiveResponse();
             if (response != null) {
                 handleResponse(response);
@@ -79,7 +78,6 @@ public final class Client implements Runnable {
                 log.warn("Server is not responding, please try again later");
                 console.writeln("Server is not responding, please try again later");
             }
-//            log.info("Response: {}", response);
 
             console.writeln("You logged in successfully!");
         } catch (IOException e) {
