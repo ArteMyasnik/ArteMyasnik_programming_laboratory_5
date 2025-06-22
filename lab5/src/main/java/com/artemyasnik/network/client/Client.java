@@ -29,7 +29,6 @@ public final class Client implements Runnable {
     private static final int RESPONSE_TIMEOUT = 5000;
     private static final int MAX_REQUEST_ATTEMPTS = 3;
     private final ExecutorService requestSenderPool = Executors.newCachedThreadPool();
-    private static final ReentrantLock lock = new ReentrantLock();
 
     private int loginAttempts = 0;
     private UserDTO userDTO = null;
@@ -61,8 +60,11 @@ public final class Client implements Runnable {
 
         userDTO = UserDTO.register(username, password);
         try {
-            sendRequest(new Request("help", Collections.emptyList(), Collections.emptyList(), userDTO));
+            Request authRequest = new Request("help", Collections.emptyList(), Collections.emptyList(), userDTO)
+            sendRequestWithRetry(authRequest);
+            log.info("Request: {}", authRequest);
             Response response = receiveResponse();
+            log.info("Response: {}", response);
             if (response.message().contains("Authorization failed.")) {
                 loginAttempts++;
                 console.writeln(response.message());
@@ -128,7 +130,6 @@ public final class Client implements Runnable {
         final List<StudyGroup> studyGroup = new LinkedList<>();
         int elementRequired = Router.getInstance().getElementRequired(command);
         while (elementRequired-- > 0) {
-            lock.lock();
             try {
                 studyGroup.add(get(script.ready() ? console : script));
             } catch (InterruptedException e) {
@@ -137,8 +138,6 @@ public final class Client implements Runnable {
             } catch (IOException ex) {
                 log.error("IOException: {}", ex.getMessage());
                 return null;
-            } finally {
-                lock.unlock();
             }
         }
         return new Request(command, args, studyGroup, userDTO);

@@ -6,48 +6,56 @@ import com.artemyasnik.io.IOWorker;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 public final class InputUtil {
+    private static final ReentrantLock lock = new ReentrantLock();
+
     public static StudyGroup get(IOWorker<String> ioWorker) throws IOException, InterruptedException {
-        StudyGroup studyGroup = new StudyGroup();
+        lock.lock();
+        try {
+            StudyGroup studyGroup = new StudyGroup();
 
-        while (!input("Study group name ", studyGroup::setName, Function.identity(), ioWorker));
+            while (!input("Study group name ", studyGroup::setName, Function.identity(), ioWorker));
 
-        Coordinates coordinates = new Coordinates();
-        while (!input("coordinates x ", coordinates::setX, Double::valueOf, ioWorker));
-        while (!input("coordinates y(greater than -365) ", coordinates::setY, Long::parseLong, ioWorker));
-        studyGroup.setCoordinates(coordinates);
+            Coordinates coordinates = new Coordinates();
+            while (!input("coordinates x ", coordinates::setX, Double::valueOf, ioWorker));
+            while (!input("coordinates y(greater than -365) ", coordinates::setY, Long::parseLong, ioWorker));
+            studyGroup.setCoordinates(coordinates);
 
-        while (!input("students count(greater than 0 or skip if null) ", studyGroup::setStudentsCount, Integer::parseInt, ioWorker));
-        while (!input("transferred students(greater than 0) ", studyGroup::setTransferredStudents, Integer::parseInt, ioWorker));
-        while (!input("semester %s ".formatted(
-                Arrays.toString(Semester.values())), studyGroup::setSemesterEnum, Semester::valueOf, ioWorker));
+            while (!input("students count(greater than 0 or skip if null) ", studyGroup::setStudentsCount, Integer::parseInt, ioWorker));
+            while (!input("transferred students(greater than 0) ", studyGroup::setTransferredStudents, Integer::parseInt, ioWorker));
+            while (!input("semester %s ".formatted(
+                    Arrays.toString(Semester.values())), studyGroup::setSemesterEnum, Semester::valueOf, ioWorker));
 
 
-        if (ioWorker.read("Make group admin[y/n](n for null)").equals("y")) {
-            Person person = new Person();
-            while (!input("Group admin name ", person::setName, Function.identity(), ioWorker));
-            while (!input("passportID(type unique) ", person::setPassportID, Function.identity(), ioWorker));
-            while (!input("hair color %s ".formatted(
-                    Arrays.toString(com.artemyasnik.collection.classes.colors.hair.Color.values())), person::setHairColor, com.artemyasnik.collection.classes.colors.hair.Color::valueOf, ioWorker));
-            while (!input("eyes color(skip if null) %s ".formatted(
-                    Arrays.toString(com.artemyasnik.collection.classes.colors.eyes.Color.values())), person::setEyeColor, com.artemyasnik.collection.classes.colors.eyes.Color::valueOf, ioWorker));
-            while (!input("nationality(skip if null) %s ".formatted(
-                    Arrays.toString(Country.values())), person::setNationality, Country::valueOf, ioWorker));
-            studyGroup.setGroupAdmin(person);
-        } else {
-            studyGroup.setGroupAdmin(null);
+            if (ioWorker.read("Make group admin[y/n](n for null)").equals("y")) {
+                Person person = new Person();
+                while (!input("Group admin name ", person::setName, Function.identity(), ioWorker));
+                while (!input("passportID(type unique) ", person::setPassportID, Function.identity(), ioWorker));
+                while (!input("hair color %s ".formatted(
+                        Arrays.toString(com.artemyasnik.collection.classes.colors.hair.Color.values())), person::setHairColor, com.artemyasnik.collection.classes.colors.hair.Color::valueOf, ioWorker));
+                while (!input("eyes color(skip if null) %s ".formatted(
+                        Arrays.toString(com.artemyasnik.collection.classes.colors.eyes.Color.values())), person::setEyeColor, com.artemyasnik.collection.classes.colors.eyes.Color::valueOf, ioWorker));
+                while (!input("nationality(skip if null) %s ".formatted(
+                        Arrays.toString(Country.values())), person::setNationality, Country::valueOf, ioWorker));
+                studyGroup.setGroupAdmin(person);
+            } else {
+                studyGroup.setGroupAdmin(null);
+            }
+
+            while (!input("form of education(skip if null) %s ".formatted(
+                    Arrays.toString(FormOfEducation.values())), studyGroup::setFormOfEducation, FormOfEducation::valueOf, ioWorker));
+
+            int newId = IdGenerator.getInstance().generateId();
+            studyGroup.setId(newId);
+
+            return studyGroup;
+        } finally {
+            lock.unlock();
         }
-
-        while (!input("form of education(skip if null) %s ".formatted(
-                Arrays.toString(FormOfEducation.values())), studyGroup::setFormOfEducation, FormOfEducation::valueOf, ioWorker));
-
-        int newId = IdGenerator.getInstance().generateId();
-        studyGroup.setId(newId);
-
-        return studyGroup;
     }
 
     private static <K> boolean input(
