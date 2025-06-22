@@ -2,6 +2,7 @@ package com.artemyasnik.network.client;
 
 import com.artemyasnik.chat.Router;
 import com.artemyasnik.collection.classes.StudyGroup;
+import com.artemyasnik.db.dao.UserDAO;
 import com.artemyasnik.db.dto.UserDTO;
 import com.artemyasnik.io.IOWorker;
 import com.artemyasnik.io.transfer.Request;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.*;
+import java.sql.SQLException;
 import java.util.*;
 
 import static com.artemyasnik.collection.util.InputUtil.get;
@@ -55,18 +57,30 @@ public final class Client implements Runnable {
         final String username = console.read("Enter login: ");
         final String password = console.read("Enter password: ");
 
-        userDTO = UserDTO.register(username, password);
+        try {
+            userDTO = UserDAO.getINSTANCE().registerUser(username, password);
+        } catch (SQLException e) {
+            console.writeln("Error: " + e.getMessage() + "Please try again");
+            loginAttempts++;
+            getUser();
+        }
         try {
             Request authRequest = new Request("help", Collections.emptyList(), Collections.emptyList(), userDTO);
-            sendRequestWithRetry(authRequest);
-            log.info("Request: {}", authRequest);
+            sendRequest(authRequest);
+//            log.info("Request: {}", authRequest);
             Response response = receiveResponse();
-            log.info("Response: {}", response);
-            if (response.message().contains("Authorization failed.")) {
+            if (response != null) {
+                handleResponse(response);
+            } else if (response.message().contains("Authorization failed.")) {
                 loginAttempts++;
                 console.writeln(response.message());
                 getUser();
+            } else {
+                log.warn("Server is not responding, please try again later");
+                console.writeln("Server is not responding, please try again later");
             }
+//            log.info("Response: {}", response);
+
             console.writeln("You logged in successfully!");
         } catch (IOException e) {
             console.writeln("Failed to send request: " + e);
@@ -100,12 +114,12 @@ public final class Client implements Runnable {
         }
 
         Request request = parseRequest(line);
-        log.info("Request: {}", request);
+//        log.info("Request: {}", request);
         if (request == null) return;
 
         try {
             Response response = sendRequestWithRetry(request);
-            log.info("Response: {}", response);
+//            log.info("Response: {}", response);
             if (response != null) {
                 handleResponse(response);
             } else {
