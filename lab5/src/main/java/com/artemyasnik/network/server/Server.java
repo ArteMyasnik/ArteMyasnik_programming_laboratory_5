@@ -108,7 +108,7 @@ public final class Server implements Runnable, AutoCloseable {
                 continue;
             }
             if (key.isReadable()) {
-                requestReaderPool.submit(() -> {
+                requestReaderPool.execute(() -> {
                     try {
                         handleRequest(key);
                     } catch (IOException e) {
@@ -117,7 +117,7 @@ public final class Server implements Runnable, AutoCloseable {
                 });
             }
             if (key.isWritable()) {
-                responseSenderPool.submit(() -> {
+                responseSenderPool.execute(() -> {
                     try {
                         handleResponse(key);
                     } catch (IOException e) {
