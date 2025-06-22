@@ -3,9 +3,10 @@ package com.artemyasnik.db.dto;
 
 import com.artemyasnik.db.util.PasswordUtil;
 
+import java.io.Serializable;
 import java.util.Objects;
 
-public record UserDTO(Integer id, String username, String passwordHash) {
+public record UserDTO(Integer id, String username, String passwordHash) implements Serializable {
     public UserDTO {
         Objects.requireNonNull(username, "Username cannot be null");
         Objects.requireNonNull(passwordHash, "Password hash cannot be null");
