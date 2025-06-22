@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static com.artemyasnik.collection.util.InputUtil.get;
 
@@ -28,8 +29,7 @@ public final class Client implements Runnable {
     private static final int RESPONSE_TIMEOUT = 5000;
     private static final int MAX_REQUEST_ATTEMPTS = 3;
     private final ExecutorService requestSenderPool = Executors.newCachedThreadPool();
-    private final ForkJoinPool responseProcessorPool = new ForkJoinPool();
-    private final Queue<Response> responseQueue = new LinkedBlockingQueue<>();
+    private static final ReentrantLock lock = new ReentrantLock();
 
     private int loginAttempts = 0;
     private UserDTO userDTO = null;
@@ -48,7 +48,6 @@ public final class Client implements Runnable {
         log.info("Client started with configuration: {}", config);
         console.writeln("Welcome to lab7 by ArteMyasnik!");
     }
-
 
     private void getUser() {
         if (loginAttempts > 5) {
@@ -88,7 +87,6 @@ public final class Client implements Runnable {
                     final String currentScriptLine = script.read();
                     requestSenderPool.execute(() -> handleInput(currentScriptLine));
                 }
-                processResponses();
             }
         } catch (SocketException e) {
             throw new RuntimeException(e);
@@ -112,7 +110,7 @@ public final class Client implements Runnable {
             Response response = sendRequestWithRetry(request);
             log.info("Response: {}", response);
             if (response != null) {
-                responseQueue.offer(response);
+                handleResponse(response);
             } else {
                 log.warn("Server is not responding, please try again later");
                 console.writeln("Server is not responding, please try again later");
@@ -123,23 +121,14 @@ public final class Client implements Runnable {
         }
     }
 
-    private void processResponses() {
-        synchronized (responseQueue) {
-            while (!responseQueue.isEmpty()) {
-                Response response = responseQueue.poll();
-                responseProcessorPool.execute(() -> handleResponse(response));
-            }
-        }
-    }
-
     private Request parseRequest(final String line) {
         final String[] parts = line.split(" ", 2);
-
         String command = parts[0];
         List<String> args = parts.length > 1 ? Arrays.asList(parts[1].split(" ")) : Collections.emptyList();
-        final List<StudyGroup> studyGroup = Collections.synchronizedList(new LinkedList<>());
+        final List<StudyGroup> studyGroup = new LinkedList<>();
         int elementRequired = Router.getInstance().getElementRequired(command);
         while (elementRequired-- > 0) {
+            lock.lock();
             try {
                 studyGroup.add(get(script.ready() ? console : script));
             } catch (InterruptedException e) {
@@ -148,6 +137,8 @@ public final class Client implements Runnable {
             } catch (IOException ex) {
                 log.error("IOException: {}", ex.getMessage());
                 return null;
+            } finally {
+                lock.unlock();
             }
         }
         return new Request(command, args, studyGroup, userDTO);
@@ -198,7 +189,6 @@ public final class Client implements Runnable {
             socket.close();
         }
         requestSenderPool.shutdownNow();
-        responseProcessorPool.shutdownNow();
         log.info("Client stopped");
     }
 }

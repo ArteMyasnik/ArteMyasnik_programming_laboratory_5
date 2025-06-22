@@ -42,7 +42,6 @@ public final class Server implements Runnable, AutoCloseable {
     private final ExecutorService requestReaderPool = Executors.newCachedThreadPool();
     private final ForkJoinPool requestProcessorPool = new ForkJoinPool();
     private final ForkJoinPool responseSenderPool = new ForkJoinPool();
-    private UserDAO userDAO;
 
     public Server(ServerConfiguration config, ConsoleWorker console) {
         this.config = config;
@@ -108,7 +107,7 @@ public final class Server implements Runnable, AutoCloseable {
                 continue;
             }
             if (key.isReadable()) {
-                requestReaderPool.execute(() -> {
+                requestReaderPool.submit(() -> {
                     try {
                         handleRequest(key);
                     } catch (IOException e) {
@@ -117,7 +116,7 @@ public final class Server implements Runnable, AutoCloseable {
                 });
             }
             if (key.isWritable()) {
-                responseSenderPool.execute(() -> {
+                responseSenderPool.submit(() -> {
                     try {
                         handleResponse(key);
                     } catch (IOException e) {
